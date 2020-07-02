@@ -23,6 +23,21 @@ CHAMPS DE LA CLASSE :
     -> Etant donne une liste d'observations et une liste de (s_t, a_t), calculer la proba (Forward / Backward)
 """
 
+def mh_transition_trajectoires(current_traj, candidate_traj, observations, policy, trans_matx, obs_matx, initial_distribution):
+    """
+    A partir de deux trajectoires, accepte l'une ou l'autre selon la formule de transition de Metropolis Hastings
+    parameters :   
+        - current_traj et candidate_traj : dictionnaires avec des champs states et actions
+    """
+
+    current_states, current_actions = current_traj['states'], current_traj['actions']
+    candidate_states, candidate_actions = candidate_traj['states'], candidate_traj['actions']
+
+    like_current = trajectory_conditional_likelihood(current_states, current_actions, observations, policy, trans_matx, obs_matx, initial_distribution)
+    like_candidate = trajectory_conditional_likelihood(candidate_states, candidate_actions, observations, policy, trans_matx, obs_matx, initial_distribution)
+
+    return np.random.binomial(n=1, p = min(1., like_candidate / like_current))
+    
 def random_transition_matrix(S, A):
     """
     sample random transition matrix 
@@ -87,17 +102,33 @@ def softmax(q_function, eta):
     e = np.exp(eta * q_function)
     return e / e.sum(axis=1)[:, None]
 
-def trajectory_likelihood(trajectory, w, eta):
+def trajectory_conditional_likelihood(states, actions, observations, policy, trans_matx, obs_matx, initial_distribution):
     """
-    Calcule la vraisemblance d'une trajectoire 
+    Calcule la vraisemblance (non normalisee par p(o_t | w) !!!!) d'une trajectoire conditionne aux observations et au vecteur w qui nous donne 
+    la reward function
     parameters : 
-        trajectory : sequence [s_1, a_1, ... , s_T]
-        w : parametre de la fonction de recompense w^T Phi(s, a)
-        eta : exploration parameter
+        - states, actions : tableaux (T+1, S) et (T, A)
+        - observations    : tableau (T, O)
+        - policy          : matrice S x A 
+        - trans_matx      : matrice de transition (S x A x S)
+        - obs_matx        : matrice des observations (S x A x O)
     """
-    # step 1 : calculer le produit des softmax pour le couples (s, a)
-    # step 2 : calculer la vraisemblance du vecteur w choisi 
-    raise NotImplementedError
+    assert len(states) == len(actions) + 1
+    T = len(actions)
+
+    # calculer p(\tau | policy )
+    p_tau_policy = initial_distribution[states[0]]
+    for t in range(T):
+        s, a = states[t], actions[t]
+        p_tau_policy *= policy[s, a] * trans_matx[s, a, states[t+1]]
+
+    # calculer p( p_{o_t} | \tau )
+    p_obs_tau = 1.
+    for t in range(T):
+        s, a, o = states[t+1], actions[t], observations[t]
+        p_obs_tau *= obs_matx[s, a, o]
+
+    return p_tau_policy * p_obs_tau
 
 def sample_trajectory(rho_0, policy, transition, T):
     """
@@ -211,8 +242,6 @@ def main():
         observations = [np.random.choice(O, p=obs_matx[states[i+1], actions[i], :]) for i in range(len(actions))]
         trajectory = get_trajectory_from_observations(observations, actions, transition, obs_matx, rho_0)
         max_traj = np.argmax(trajectory, axis=1)
-
-        print(np.mean(max_traj == states))
-        input()
+        
 
 main()
