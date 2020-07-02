@@ -88,10 +88,13 @@ def q_function(reward_function, transition, gamma):
     Calcule la q_function optimale par value iteration
     transition : array of size S * A * S normalized on axis 2 
     """
+    S, A = reward_function.shape
     q = np.empty_like(reward_function)
     nb_iter = 50
     for n in range(nb_iter):
-        q = reward_function + gamma * np.sum(transition * np.amax(q, axis=1), axis=2)
+        for s in range(S):
+            for a in range(A):
+                q[s, a] = reward_function[s, a] + gamma * transition[s, a, :].dot(np.amax(q, axis=1))
     return q
 
 def softmax(q_function, eta):
