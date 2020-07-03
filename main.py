@@ -56,24 +56,6 @@ def random_observation_matrix(S, A, O):
         obs[s] = obs[s] / np.sum(obs[s], axis = 1)[:, np.newaxis]
     return obs
 
-def sample_norm_inv_wish(mu_0, k_0, Sigma_0, nu_0, size):
-    """
-    Sample mu, Sigma from Normal Inverse Wishart distribution 
-    parameters : 
-        - mu_0 : center of normal distribution
-        - k_0 : scaling of normal distribution
-        - Sigma_0 : scale parameter of inverse wishart
-        - nu_0    : degrees of parameters of inverse wishart 
-    """
-    Sigma = stats.invwishart.rvs(nu_0, Sigma_0, size)
-    mu = np.zeros(size + mu_0.shape)
-    # iterate over all the covariance matrices 
-    it = np.nditer(mu, flags=['multi_index'])
-    for x in it:
-        indx = it.multi_index[:-1]
-        mu[indx] = stats.multivariate_normal.rvs(mean = mu_0, cov = Sigma[indx] / k_0)
-    return mu, Sigma
-
 def linear_reward_function(w, basis):
     """
     Returns a S x A matrix representing the reward function 
