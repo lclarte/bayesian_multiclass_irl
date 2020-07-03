@@ -3,7 +3,19 @@ import scipy.stats as stats
 
 from typing import NamedTuple
 
-class DirichletProcessParams():
+def sample_beta(size, tau):
+        """
+        Sample from beta distribution 
+        """
+        return stats.beta.rvs(1, tau, size)
+
+def compute_class_probabilities(betas):
+        ps    = np.zeros((len(betas),))
+        ps[:]    = betas[:]
+        ps[1:] *= np.cumprod(1 - betas[:-1])  
+        return ps
+
+class DirichletProcess():
     """
     Classe contenant les parametres tau  & (mu_0, Sigma_0, k_0, nu_0) pour le processus de Dirichlet qui genere les params.
     mu, SIgma
@@ -16,6 +28,12 @@ class DirichletProcessParams():
     nu_0    : float
 
     tau     : float
+
+    def __init__(self):
+        # nombre de classe qu'on sample initialement
+        self.num_betas = 50
+        self.betas = np.zeros(shape=(self.num_betas))
+        self.probas = np.zeros_like(self.betas)
 
     def sample_norm_inv_wish(self, size):
         """
@@ -34,6 +52,20 @@ class DirichletProcessParams():
             indx = it.multi_index
             mu[indx] = stats.multivariate_normal.rvs(mean = self.mu_0, cov = Sigma[indx] / self.k_0)
         return mu, Sigma
+
+    def sample_class_from_probas(self):
+        pass
+
+    def sample_class_probabilities(self):
+        pass
+
+    def sample_class(self, num_samples):
+        """
+        Attention : il faut un nombre infini de betas pour que ca somme a 1. 
+        On sample une var Bernoulli(Somme(self.probas)). Si elle vaut 1, alors on fait np.choice(self.probas / Somme(probas))
+        Sinon, on resample des nouvelles probas et on recommence    
+        """
+        pass
 
 class Environment(NamedTuple):
     """
