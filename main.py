@@ -5,29 +5,19 @@
 # RMK : Dans le IRL pour un POMDP, on a une observation w = f(s_t+1, a_t) et les actions a_t
 
 import pymc3 as pm 
-from scipy import stats 
+from scipy import stats, optimize
 import numpy as np
 import matplotlib.pyplot as plt
+import itertools
 
-"""
-Classe contenant  l'environnement, pour que l'agent interagisse avec l'env. 
-CHAMPS DE LA CLASSE : 
-    - Matrice de transition T(. | s, a)
-    - Matrice des observations W(S, A, O) (ensemble des observations finis)
-    - Distribution sur l'etat initial
-1) Pour le sampling:
-    - Fonction .step() comme dans Gym, retourne l'observation et la recompense
-    - Fonction reset : donne l'observation initiale
-2) Pour l'inference:
-    -> Etant donne une liste d'observations, calculer le MAP des (s_t, a_t)
-    -> Etant donne une liste d'observations et une liste de (s_t, a_t), calculer la proba (Forward / Backward)
-"""
-
-def mh_transition_trajectoires(current_traj, candidate_traj, observations, policy, trans_matx, obs_matx, initial_distribution):
+def mh_transition_trajectories(current_traj, candidate_traj, observations, policy, trans_matx, obs_matx, initial_distribution):
     """
     A partir de deux trajectoires, accepte l'une ou l'autre selon la formule de transition de Metropolis Hastings
     parameters :   
         - current_traj et candidate_traj : dictionnaires avec des champs states et actions
+        i.e current_traj['actions'] et current_traj['states']
+    returns:
+        - booleen si on accepte (ou non) de changer de trajectoire
     """
 
     current_states, current_actions = current_traj['states'], current_traj['actions']
@@ -54,6 +44,18 @@ def random_observation_matrix(S, A, O):
     obs = np.random.rand(S, A, O)
     for s in range(S):
         obs[s] = obs[s] / np.sum(obs[s], axis = 1)[:, np.newaxis]
+    return obs
+
+def noisy_id_observation_matrix(S, A, O,  eps=0.1):
+    """
+    Construit une matrice d'observations proche de l'identite legerement perturbee
+    arguments:
+        -eps : perturbation de la matrice identite
+    """
+    assert S == O
+    obs = np.zeros((S, A, O))
+    for a in range(A):
+        obs[:, a, :] = (1. - eps)*np.eye(S) + (eps / S) * np.ones((S, O))
     return obs
 
 def linear_reward_function(w, basis):
@@ -115,6 +117,18 @@ def trajectory_conditional_likelihood(states, actions, observations, policy, tra
 
     return p_tau_policy * p_obs_tau
 
+def trajectory_likelihood_policy(states, actions, policy):
+    """
+    Retourne la vraisemblance de la trajectoire donnee en fonction de la policy, c'est a dire le produit 
+    des probas \pi( a_t | s_t ), ne prend pas en compte la distribution initiale ni la transition de l'
+    environnement. 
+    """
+    likelihood = 1.
+    T = len(actions)
+    for t in range(T):
+        likelihood *= policy[states[t], actions[t]]
+    return likelihood
+
 def sample_trajectory(rho_0, policy, transition, T):
     """
     Rmque : renvoie un etat de plus que d'actions (car il n'y a pas d'action pour le dernier step de la traj)
@@ -142,7 +156,7 @@ def get_trajectory_reward(states, actions, reward_function):
     assert len(states) == len(actions) + 1
     return sum(reward_function[states[i], actions[i]] for i in range(len(actions)))
 
-def get_trajectory_from_observations(observations, actions, transition, obs_matrix, initial_distribution):
+def get_belief_from_observations(observations, actions, transition, obs_matrix, initial_distribution):
     """
     retourne une distributions sur les trajectoires a partir des observations de cette derniere
     parameters :
@@ -152,7 +166,7 @@ def get_trajectory_from_observations(observations, actions, transition, obs_matr
         - obs_matrix   : matrice S x A x O (s_t+1, a_t) -> o_t
         - initial_distribution : vecteur de taille S, proba sur l'instant initial s_0
     returns :
-        - trajectory   : matrice T x S belief a chaque instant 
+        - trajectory   : matrice T x S des belief a chaque instant 
     """
     # Rque : meme longueur observations et actions, car le premier etat de la trajectoire 
     # n'est associe a aucune action
@@ -161,72 +175,35 @@ def get_trajectory_from_observations(observations, actions, transition, obs_matr
     trajectory = np.zeros(shape=(T+1, S))
     # taille T+1 car le premier etat est connu
 
+    # rappelons qu'on ne peut pas connaitre exactement le premier etat
     trajectory[0] = initial_distribution # pour l'instant, un dirac
-    for t in range(1, T):
+    # exemple : la premiere observation / action (indice 0) sert a estimer le second etat (indice 1) 
+    for t in range(1, T+1):
         a, w = actions[t-1], observations[t-1]
         
         for s2 in range(S):
             trajectory[t, s2] = obs_matrix[s2, a, w] * transition[:, a, s2].dot(trajectory[t-1])
     return trajectory
 
-# placeholder
-# Espace latent est de dimension 2
-n = 2
-tau = 5.
-mu_0 = np.zeros(n)
-k_0  = 1.0
-Sigma_0 = np.identity(n)
-nu_0 = len(Sigma_0)
+def trajectories_to_state_occupation(trajectories, S):
+    """
+    arguments:
+        - trajectories : Array de longueur N (nb de trajectoires), chaque element est un array de longueur T etats
+    returns : 
+        - empirical_occupation : moyenne de l'occupation de l'etat s au temps T sur l'ensemble des trajectoires 
+    """
+    T = len(trajectories[0])
+    avg_occ = np.zeros((T, S))
+    for traj in trajectories:
+        for t in range(T):
+            avg_occ[t, traj[t]] += 1.
+    return avg_occ / float(len(trajectories))
 
-S = 10
-A = 2
-O = S
-
-gamma = 0.9
-eta   = 1.0
-
-# distribution sur les etats initiaux : dirac sur 0 ici
-rho_0 = np.array([1.] + [0]*(S - 1))
-
-def main():
-    transition = random_transition_matrix(S, A)
-    obs_matx = random_observation_matrix(S, A, O)
-    basis = np.random.rand(S, A, n)
-
-    # Code pour echantilloner une trajectoire from scratch 
-    # N : nombre de samples = nb de MDPs 
-    N = 1000
-    # T : duree d'une trajectoire
-    T = 50
-    # K : nombre de classe de MDPs. Est infini en theorie, ici on prend juste un grand nombre 
-    K = 10
-    beta = stats.beta.rvs(1, tau, size=(K)) 
-    p    = np.empty_like(beta)
-    p[0] = beta[0] #1er element : proba de la classe = beta_0
-    p[1:] = beta[1:] * (1 - beta[1:]).cumprod(axis=0)
-    # normalisation parce qu'on a pas un nb illimite de betas
-    p /= np.sum(p)
-    # liste des parametres pour chaque classe
-    omega = sample_norm_inv_wish(mu_0, k_0, Sigma_0, nu_0, size=(K, ))
-    # assignation de la classe pour chaque MDP
-    classes = np.random.choice(a=K, p=p, size=(N,))
-    ws = np.zeros(shape=(N, n))
-    qs = np.zeros(shape=(N, S, A))
-
-    for x in range(N):
-
-        mu, Sigma = omega[0][classes[x]], omega[1][classes[x]]
-        ws[x] = np.random.multivariate_normal(mu, Sigma)
-        reward_function = linear_reward_function(ws[x], basis)
-        qs[x] = q_function(reward_function, transition, gamma)
-        policy = softmax(qs[x], eta)
-        # generer une trajectoire (longueur (T+1, T)) 
-        states, actions = sample_trajectory(rho_0, policy, transition, T)
-        # autant d'observations (T) que d'actions : o_t = f(a_t, s_{t+1}) pour t
-        # decalage d'indice entre l'etat et l'observation associee : states[t] <-> observation[t-1]
-        observations = [np.random.choice(O, p=obs_matx[states[i+1], actions[i], :]) for i in range(len(actions))]
-        trajectory = get_trajectory_from_observations(observations, actions, transition, obs_matx, rho_0)
-        max_traj = np.argmax(trajectory, axis=1)
-        
-
-main()
+def map_w_from_map_trajectory(states, actions, mu, Sigma, basis, transition, gamma, eta):
+    n = basis.shape[-1]
+    def minus_penalized_likelihood(w):
+        policy = softmax(q_function(linear_reward_function(w , basis), transition, gamma), eta)
+        retour = trajectory_likelihood_policy(states, actions, policy) * stats.multivariate_normal.pdf(w, mean=mu, cov=Sigma) 
+        return -retour 
+    res = optimize.minimize(minus_penalized_likelihood, x0=np.zeros(n))
+    return res.x
