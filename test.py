@@ -2,6 +2,8 @@ import numpy as np
 import unittest
 from environnement import DirichletProcess
 from main import *
+from inference import *
+from sampling import *
 
 parameters = {
 'n' :  2,
@@ -22,8 +24,6 @@ parameters = {
 'eta'   : 1.0 # param for softmax policy. Plus c'est haut, plus la distribution sera piquee 
 }
 
-# Test 1 : Posterior sampling des trajectoires etant donne un vecteur w et des obervations
-
 def test_posterior_sampling(p):
     S, A, O, T = p['S'], p['A'], p['O'], p['T']
     n = p['n'] # size of latent space
@@ -34,7 +34,7 @@ def test_posterior_sampling(p):
     trans_matx = random_transition_matrix(S, A)
     obs_matx   = noisy_id_observation_matrix(S, A, O, eps=0.1)
 
-    mu, Sigma = np.zeros((2, )), np.eye(2)
+    mu, Sigma = np.array([1.0, 1.0]), np.eye(2)
     w = stats.multivariate_normal.rvs(mean=mu, cov=Sigma)
 
     print('True w : ', w)
@@ -53,31 +53,18 @@ def test_posterior_sampling(p):
     # rque ; dans le POMDP, les etats pas sont observes, mais les actions oui
     states, actions = sample_trajectory(rho_0, policy, trans_matx, T)
     observations = [np.random.choice(O, p=obs_matx[states[i+1], actions[i], :]) for i in range(len(actions))]
-    
-    
-    """
-    # ici, on va faire une suite de trajectoires et etudier leur distribution, comparee
-    K = 1000
-    current_states = np.random.choice(S, size=T+1)
-    states_history = [current_states]
-
-    for k in range(K):
-        # take random trajectory
-        candidate_states = np.random.choice(S, size=T+1)
-        cand_traj = {'states' : candidate_states, 'actions' : actions}
-        curr_traj = {'states' : current_states, 'actions' : actions}
-        # Metropolis-Hastings to reassign new states
-        if mh_transition_trajectories(curr_traj, cand_traj, observations, policy, trans_matx, obs_matx, rho_0) == 1:
-            current_states = candidate_states
-        states_history.append(current_states)
-    """
         
     print('Ground truth : ', states)
     belief = get_belief_from_observations(observations, actions, trans_matx, obs_matx, rho_0)
-    print('MAP of states : ', np.argmax(belief, axis=1))
+    predicted_states = np.argmax(belief, axis=1)
+    print('MAP of states : ', predicted_states)
+    print('MAP is correct on ', np.mean(predicted_states == states), ' percent of the time')
 
     w_map = map_w_from_map_trajectory(states, actions, mu, Sigma, basis, trans_matx, gamma, eta)
     print('MAP of w : ', w_map)
+
+    w_grid = [np.arange(0., 2., .1), np.arange(0., 2., .1)]
+    plot_w_posterior_likelihood(w_grid, mu, Sigma, states, actions, basis, trans_matx, gamma, eta)
 
 test_posterior_sampling(parameters)
 
