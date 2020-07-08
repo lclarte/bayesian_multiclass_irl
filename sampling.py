@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.stats as stats
 
 def random_transition_matrix(S, A):
     """
@@ -47,3 +48,21 @@ def sample_trajectory(rho_0, policy, transition, T):
         states.append(next_state)
         actions.append(action)
     return states, actions
+
+def sample_norm_inv_wish(mu_0, k_0, Sigma_0, nu_0, size):
+    """
+    Retourne un tuple (mu, Sigma) tires de la loi Normale x inverse Wishart. 
+    parameters:
+        - size : tuple (d0, ..., dn)
+    returns : 
+        - mu : np.array de taille (d0, ..., dn, N)
+        - Sigma : np.array de taille (d0, ..., dn, N, N)
+    """
+    Sigma = stats.invwishart.rvs(nu_0, Sigma_0, size)
+    mu = np.zeros(size + mu_0.shape)
+    # iterate over all the covariance matrices
+    it = np.nditer(np.zeros(size), flags=['multi_index'])
+    for _ in it:
+        indx = it.multi_index
+        mu[indx] = stats.multivariate_normal.rvs(mean = mu_0, cov = Sigma[indx] / k_0)
+    return mu, Sigma

@@ -54,11 +54,9 @@ def test_posterior_sampling(p):
     states, actions = sample_trajectory(rho_0, policy, trans_matx, T)
     observations = [np.random.choice(O, p=obs_matx[states[i+1], actions[i], :]) for i in range(len(actions))]
         
-    print('Ground truth : ', states)
     belief = get_belief_from_observations(observations, actions, trans_matx, obs_matx, rho_0)
     predicted_states = np.argmax(belief, axis=1)
-    print('MAP of states : ', predicted_states)
-    print('MAP is correct on ', np.mean(predicted_states == states), ' percent of the time')
+    print('MAP is correct ', np.mean(predicted_states == states), ' percent of the time')
 
     w_map = map_w_from_map_trajectory(states, actions, mu, Sigma, basis, trans_matx, gamma, eta)
     print('MAP of w : ', w_map)
@@ -66,7 +64,24 @@ def test_posterior_sampling(p):
     w_grid = [np.arange(0., 2., .1), np.arange(0., 2., .1)]
     plot_w_posterior_likelihood(w_grid, mu, Sigma, states, actions, basis, trans_matx, gamma, eta)
 
-test_posterior_sampling(parameters)
+def test_niw_posterior_sampling(p):
+    mu_0 = p['mu_0']
+    Sigma_0 = p['Sigma_0']
+    k_0 = p['k_0']
+    nu_0 = p['nu_0']
+
+    k = 1000
+
+    mu, Sigma = sample_norm_inv_wish(mu_0, k_0, Sigma_0, nu_0, size=(1,))
+    print('Sampled mean : ', mu)
+    print('Covariance matrix : ', Sigma)
+
+    ws = stats.multivariate_normal.rvs(mean=mu[0], cov=Sigma, size=(k,))
+
+    mu_p, k_p, Sigma_p, nu_p = posterior_normal_inverse_wishart(ws, mu_0, k_0, Sigma_0, nu_0)
+    print('Infered mean : ', mu_p)
+    print('Infered covariance :', Sigma_p)
+    print('k_post = ', k_p, ' & nu_p', nu_p)
 
 class TestDirichletProcess(unittest.TestCase):
     def test_sample_class(self):
@@ -93,3 +108,7 @@ class TestDirichletProcess(unittest.TestCase):
         n = 10
         mu, Sigma = dp.sample_norm_inv_wish(size=(n,))
         self.assertTrue(mu.shape == (n, 2) and Sigma.shape == (n, 2, 2))
+
+if __name__ == '__main__':
+    # test_posterior_sampling(parameters)
+    test_niw_posterior_sampling(parameters)

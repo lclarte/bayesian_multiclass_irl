@@ -23,11 +23,6 @@ class DirichletProcess():
     Remarque : nu_0 doit etre strictement plus grand que D - 1, avec D la tailel de Sigma_0
     """
 
-    Sigma_0 : np.ndarray
-    mu_0    : np.ndarray
-    k_0     : float
-    nu_0    : float
-
     tau     : float
 
     def __init__(self):
@@ -44,24 +39,6 @@ class DirichletProcess():
         self.betas = np.concatenate((self.betas, betas))
         self.probas = np.concatenate((self.probas, probas))
         self.probas_sum.append(np.sum(probas))
-
-    def sample_norm_inv_wish(self, size):
-        """
-        Retourne un tuple (mu, Sigma) tires de la loi Normale x inverse Wishart. 
-        parameters:
-            - size : tuple (d0, ..., dn)
-        returns : 
-            - mu : np.array de taille (d0, ..., dn, N)
-            - Sigma : np.array de taille (d0, ..., dn, N, N)
-        """
-        Sigma = stats.invwishart.rvs(self.nu_0, self.Sigma_0, size)
-        mu = np.zeros(size + self.mu_0.shape)
-        # iterate over all the covariance matrices 
-        it = np.nditer(np.zeros(size), flags=['multi_index'])
-        for _ in it:
-            indx = it.multi_index
-            mu[indx] = stats.multivariate_normal.rvs(mean = self.mu_0, cov = Sigma[indx] / self.k_0)
-        return mu, Sigma
 
     def sample_class_from_probas(self, block):
         """

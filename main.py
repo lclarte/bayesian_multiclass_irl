@@ -18,7 +18,8 @@ def plot_w_posterior_likelihood(w_grid, mu, Sigma, states, actions, basis, trans
     def penalized_likelihood(w):
         policy = softmax(q_function(linear_reward_function(w , basis), trans_matx, gamma), eta)
         retour = trajectory_likelihood_policy(states, actions, policy) * stats.multivariate_normal.pdf(w, mean=mu, cov=Sigma) 
-        return retour 
+        return np.log(retour)
+
     X, Y = w_grid
     likelihood = np.zeros((len(X), len(Y)))
     for i in range(len(X)):
@@ -28,5 +29,7 @@ def plot_w_posterior_likelihood(w_grid, mu, Sigma, states, actions, basis, trans
             likelihood[i, j] = penalized_likelihood(w)
     # plot results
     X, Y = np.meshgrid(X, Y)
-    plt.contour(X, Y, likelihood)
+    fig, ax = plt.subplots()
+    cont = plt.contour(X, Y, likelihood)
+    fig.colorbar(cont, shrink=0.8, extend='both')
     plt.show()

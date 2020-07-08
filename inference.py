@@ -96,11 +96,11 @@ def trajectories_to_state_occupation(trajectories, S):
 
 def map_w_from_map_trajectory(states, actions, mu, Sigma, basis, transition, gamma, eta):
     n = basis.shape[-1]
-    def minus_penalized_likelihood(w):
+    def minus_log_penalized_likelihood(w):
         policy = softmax(q_function(linear_reward_function(w , basis), transition, gamma), eta)
-        retour = trajectory_likelihood_policy(states, actions, policy) * stats.multivariate_normal.pdf(w, mean=mu, cov=Sigma) 
-        return -retour 
-    res = optimize.minimize(minus_penalized_likelihood, x0=mu)
+        retour = np.log(trajectory_likelihood_policy(states, actions, policy)) + np.log(stats.multivariate_normal.pdf(w, mean=mu, cov=Sigma) )
+        return - retour
+    res = optimize.minimize(minus_log_penalized_likelihood, x0 = mu)
     return res.x
 
 def mh_transition_trajectories(current_traj, candidate_traj, observations, policy, trans_matx, obs_matx, initial_distribution):
@@ -119,3 +119,23 @@ def mh_transition_trajectories(current_traj, candidate_traj, observations, polic
     like_candidate = trajectory_conditional_likelihood(candidate_states, candidate_actions, observations, policy, trans_matx, obs_matx, initial_distribution)
 
     return np.random.binomial(n=1, p = min(1., like_candidate / like_current))
+
+def posterior_normal_inverse_wishart(ws, mu_0, k_0, Sigma_0, nu_0):
+    """
+    arguments:
+        - ws : array de taille k x n
+        - mu_0 : array de taille n
+        - Sigma_0 : array de taille n x n
+    """
+    k, n = ws.shape
+    w_mean = np.mean(ws, axis=0)
+    w_cov  = (ws - w_mean).T @ (ws - w_mean)
+    
+    nu_post = nu_0 + k
+    k_post   = k_0  + k
+
+    mu_post = (k_0 * mu_0 + k * w_mean) / k_post
+    w_tilde = np.reshape(w_mean - mu_0, newshape=(1, n))
+    Sigma_post = Sigma_0 + w_cov + (k_0 * k) / k_post * (w_tilde.T @ w_tilde)
+
+    return mu_post, k_post, Sigma_post, nu_post
