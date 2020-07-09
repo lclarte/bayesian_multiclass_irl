@@ -88,7 +88,7 @@ class Environment(NamedTuple):
 
         return (S1 == S2 == S3 == S4 == S5) and (A1 == A2 == A3)
 
-def Trajectory(NamedTuple):
+class Trajectory(NamedTuple):
     """
     Contient la liste des etats, des observations et des actions prises dans une trajectoire
     """
@@ -106,13 +106,16 @@ def Trajectory(NamedTuple):
         Ces potentiels sont conditionnés par la police et les matrices de transition / observation 
         """
         assert (not (self.actions is None)) and (not (self.observations is None))
-        T = len(observations) + 1
+        T = len(self.observations)
         S, A, _ = env.trans_matx.shape
         # binary[t] : entre s_t et s_{t+1}
-        unary, binary = np.zeros(shape=(T+1, S)), np.zeros(shape=(T, S))
+        unary, binary = np.zeros(shape=(T+1, S)), np.zeros(shape=(T, S, S))
         # first state is special case
         unary[0, :] = policy[:, self.actions[0]] * env.init_dist[:]
         for t in range(1, T+1):
-            unary[t, :] = policy[:, self.actions[t]] * env.obsvn_matx[:, self.actions[t-1], self.observation[t]]
+            if t == T:
+                unary[T] = env.obsvn_matx[:, self.actions[T-1], self.observations[T-1]] 
+            else:
+                unary[t] = policy[:, self.actions[t]] * env.obsvn_matx[:, self.actions[t-1], self.observations[t-1]]
             binary[t-1] = env.trans_matx[:, self.actions[t-1], :]
         return unary, binary
