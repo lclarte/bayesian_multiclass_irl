@@ -18,7 +18,7 @@ parameters = {
 'S' : 5,
 'A' : 2,
 'O' : 5,
-'T' : 100, # S x T = 50 trajectoires possibles (pas trop gros pour faire des tests)
+'T' : 1000, # S x T = 50 trajectoires possibles (pas trop gros pour faire des tests)
 
 'gamma' : 0.1,
 'eta'   : 1.0 # param for softmax policy. Plus c'est haut, plus la distribution sera piquee 
@@ -30,16 +30,15 @@ def test_posterior_sampling(p):
     gamma = parameters['gamma']
     eta = parameters['eta']
     rho_0 = parameters['rho_0']
-    
+
     trans_matx = random_transition_matrix(S, A)
     obs_matx   = noisy_id_observation_matrix(S, A, O, eps=0.1)
+    basis = np.random.rand(S, A, n)
+
+    env = Environment(gamma = gamma, trans_matx = trans_matx, obsvn_matx = obs_matx, features = basis, init_dist = rho_0)
 
     mu, Sigma = np.array([1.0, 1.0]), np.eye(2)
     w = stats.multivariate_normal.rvs(mean=mu, cov=Sigma)
-
-    print('True w : ', w)
-
-    basis = np.random.rand(S, A, n)
 
     reward_function = linear_reward_function(w, basis)
 
@@ -54,12 +53,17 @@ def test_posterior_sampling(p):
     states, actions = sample_trajectory(rho_0, policy, trans_matx, T)
     observations = [np.random.choice(O, p=obs_matx[states[i+1], actions[i], :]) for i in range(len(actions))]
         
-    belief = get_belief_from_observations(observations, actions, trans_matx, obs_matx, rho_0)
+    belief = get_belief_from_observations(observations, actions, env)
     predicted_states = np.argmax(belief, axis=1)
     print('MAP is correct ', np.mean(predicted_states == states), ' percent of the time')
 
-    w_map = map_w_from_map_trajectory(states, actions, mu, Sigma, basis, trans_matx, gamma, eta)
-    print('MAP of w : ', w_map)
+    w_map = map_w_from_observations(actions, observations, mu, Sigma, eta, env)
+    w_map_2 = map_w_from_map_trajectory(states, actions, mu, Sigma, eta, env)
+    w_mle = mle_w(actions, observations, eta, env)
+    print('True w : ', w)
+    print('MAP of w computed with true posterior : ', w_map)
+    print('MAP of w computed with MAP of states : ', w_map_2)
+    print('MLE of w', w_mle)
 
     w_grid = [np.arange(0., 2., .1), np.arange(0., 2., .1)]
     plot_w_posterior_likelihood(w_grid, mu, Sigma, states, actions, basis, trans_matx, gamma, eta)
@@ -110,5 +114,5 @@ class TestDirichletProcess(unittest.TestCase):
         self.assertTrue(mu.shape == (n, 2) and Sigma.shape == (n, 2, 2))
 
 if __name__ == '__main__':
-    # test_posterior_sampling(parameters)
-    test_niw_posterior_sampling(parameters)
+    test_posterior_sampling(parameters)
+    # test_niw_posterior_sampling(parameters)
