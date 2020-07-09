@@ -74,7 +74,7 @@ class Environment(NamedTuple):
         - features   : S x A
         - init_dist  : S
     """
-    trans_matx : np.ndarray 
+    trans_matx : np.ndarray
     obsvn_matx : np.ndarray
     features   : np.ndarray
     init_dist  : np.ndarray
@@ -87,3 +87,32 @@ class Environment(NamedTuple):
         S5         = self.init_dist.shape
 
         return (S1 == S2 == S3 == S4 == S5) and (A1 == A2 == A3)
+
+def Trajectory(NamedTuple):
+    """
+    Contient la liste des etats, des observations et des actions prises dans une trajectoire
+    """
+    actions      : np.ndarray = None
+    observations : np.ndarray = None
+    states       : np.ndarray = None
+
+    def check_compatible_sizes(self):
+        return (len(self.actions) == len(self.observations) == len(self.states) - 1)
+
+    def get_chain_potentials(self, policy : np.ndarray, env : Environment):
+        """
+        retourne les potentiels binaires et unaires d'une chaine ou les variables a inférer sont les états
+        et les variables observées sont les observations et les actions.
+        Ces potentiels sont conditionnés par la police et les matrices de transition / observation 
+        """
+        assert (not (self.actions is None)) and (not (self.observations is None))
+        T = len(observations) + 1
+        S, A, _ = env.trans_matx.shape
+        # binary[t] : entre s_t et s_{t+1}
+        unary, binary = np.zeros(shape=(T+1, S)), np.zeros(shape=(T, S))
+        # first state is special case
+        unary[0, :] = policy[:, self.actions[0]] * env.init_dist[:]
+        for t in range(1, T+1):
+            unary[t, :] = policy[:, self.actions[t]] * env.obsvn_matx[:, self.actions[t-1], self.observation[t]]
+            binary[t-1] = env.trans_matx[:, self.actions[t-1], :]
+        return unary, binary
