@@ -1,9 +1,15 @@
-import numpy as np
 import unittest
-from environnement import DirichletProcess
-from main import *
-from inference import *
-from sampling import *
+import sys
+sys.path.append('..')
+
+import numpy as np
+
+from irl.dirichletprocess import *
+from irl.niw import *
+from irl.bp import *
+from irl.environnement import *
+from irl.sampling import *
+from irl.inference import *
 
 parameters = {
 'n' :  2,
@@ -18,13 +24,17 @@ parameters = {
 'S' : 5,
 'A' : 2,
 'O' : 5,
-'T' : 1000, # S x T = 50 trajectoires possibles (pas trop gros pour faire des tests)
+'T' : 50, # S x T = 50 trajectoires possibles (pas trop gros pour faire des tests)
 
 'gamma' : 0.1,
 'eta'   : 1.0 # param for softmax policy. Plus c'est haut, plus la distribution sera piquee 
 }
 
-def test_posterior_sampling(p):
+def test_posterior_sampling( p ):
+    """
+    Sample un vecteur w sur une loi (mu, Sigma) donnee et infere ce vecteur w en ayant observe (mu, Sigma) ainsi 
+    que les trajectoires (actions, observations). Il faut aussi inferer en meme temps les etats w
+    """
     S, A, O, T = p['S'], p['A'], p['O'], p['T']
     n = p['n'] # size of latent space
     gamma = parameters['gamma']
@@ -41,21 +51,12 @@ def test_posterior_sampling(p):
     w = stats.multivariate_normal.rvs(mean=mu, cov=Sigma)
 
     reward_function = linear_reward_function(w, basis)
-
-    print('reward function : ', reward_function)
-
     qstar = q_function(reward_function, trans_matx, gamma)
     policy = softmax(qstar, eta)
-
-    print('policy : ', policy)
     
     # rque ; dans le POMDP, les etats pas sont observes, mais les actions oui
     states, actions = sample_trajectory(rho_0, policy, trans_matx, T)
     observations = [np.random.choice(O, p=obs_matx[states[i+1], actions[i], :]) for i in range(len(actions))]
-        
-    belief = get_belief_from_observations(observations, actions, env)
-    predicted_states = np.argmax(belief, axis=1)
-    print('MAP is correct ', np.mean(predicted_states == states), ' percent of the time')
 
     w_map = map_w_from_observations(actions, observations, mu, Sigma, eta, env)
     w_map_2 = map_w_from_map_trajectory(states, actions, mu, Sigma, eta, env)
@@ -65,8 +66,59 @@ def test_posterior_sampling(p):
     print('MAP of w computed with MAP of states : ', w_map_2)
     print('MLE of w', w_mle)
 
-    w_grid = [np.arange(0., 2., .1), np.arange(0., 2., .1)]
-    plot_w_posterior_likelihood(w_grid, mu, Sigma, states, actions, basis, trans_matx, gamma, eta)
+def test_posterior_niw( p ):
+    M = 10
+    S, A, O, T = p['S'], p['A'], p['O'], p['T']
+    n = p['n'] # size of latent space
+    gamma = parameters['gamma']
+    eta = parameters['eta']
+    rho_0 = parameters['rho_0']
+    
+    trans_matx = random_transition_matrix(S, A)
+    obs_matx   = noisy_id_observation_matrix(S, A, O, eps=0.1)
+    basis = np.random.rand(S, A, n)
+    env = Environment(gamma = gamma, trans_matx = trans_matx, obsvn_matx = obs_matx, features = basis, init_dist = rho_0)
+
+    mu_0, k_0, Sigma_0, nu_0 = p['mu_0'], p['k_0'], p['Sigma_0'], p['nu_0']
+
+    mu, Sigma = sample_norm_inv_wish(mu_0, k_0, Sigma_0, nu_0, size=(1, ))
+    mu = mu[0]
+    
+    # on sample un certain nombre de MDP a partir de mu, Sigma
+    ws = np.random.multivariate_normal(mean=mu, cov=Sigma, size=(M, ))
+    states = np.zeros(shape=(M, T+1), dtype=int)
+    map_states = np.zeros_like(states)
+    actions = np.zeros(shape=(M, T), dtype=int)
+    observations = np.zeros(shape=(M, T), dtype=int)
+
+    for m in range(M):
+        w = ws[m]
+        reward_function = linear_reward_function(w, basis)
+        qstar = q_function(reward_function, trans_matx, gamma)
+        policy = softmax(qstar, eta)
+        states[m], actions[m] = sample_trajectory(rho_0, policy, trans_matx, T)
+        observations[m] = [np.random.choice(O, p = obs_matx[states[m, i+1], actions[m, i], :]) for i in range(len(actions[m]))]
+        map_states[m] = np.argmax(get_belief_from_observations(observations[m], actions[m], env) , axis=1) 
+
+    K = 10
+    mu_curr, k_curr, Sigma_curr, nu_curr = mu_0, k_0, Sigma_0, nu_0
+    mu_curr_2, k_curr_2, Sigma_curr_2, nu_curr_2 = mu_0, k_0, Sigma_0, nu_0
+    w_map = np.zeros(shape=(M, n))
+    w_map_2 = np.zeros(shape=(M, n))
+    for k in range(K):
+        print('k = ', k)
+        for m in range(M):
+            w_map[m] = map_w_from_observations(actions[m], observations[m], mu_curr, Sigma_curr / k_curr, eta, env)
+            w_map_2[m] = map_w_from_map_trajectory(map_states[m], actions[m], mu_curr_2, Sigma_curr_2, eta, env)
+        mu_curr, k_curr, Sigma_curr, nu_curr = posterior_normal_inverse_wishart(w_map, mu_0, k_0, Sigma_0, nu_0)
+        mu_curr_2, k_curr_2, Sigma_curr_2, nu_curr_2 = posterior_normal_inverse_wishart(w_map_2, mu_0, k_0, Sigma_0, nu_0)
+    print('Infered mu, Sigma : ')
+    print('mu = ', mu_curr)
+    print('Infered mu, Sigma from MAP of trajectories: ')
+    print('mu = ', mu_curr_2)
+    print('True parameters : ')
+    print('mu = ', mu)
+
 
 def test_niw_posterior_sampling(p):
     mu_0 = p['mu_0']
@@ -114,5 +166,4 @@ class TestDirichletProcess(unittest.TestCase):
         self.assertTrue(mu.shape == (n, 2) and Sigma.shape == (n, 2, 2))
 
 if __name__ == '__main__':
-    test_posterior_sampling(parameters)
-    # test_niw_posterior_sampling(parameters)
+    test_posterior_niw(parameters)

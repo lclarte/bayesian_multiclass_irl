@@ -124,7 +124,7 @@ def map_w_from_observations(actions : np.ndarray, observations : np.ndarray, mu 
         policy = softmax(q_function(linear_reward_function(w , features), trans_matx, gamma), eta)
         prior_proba = stats.multivariate_normal.pdf(w, mean=mu, cov=Sigma)
         unary, binary = traj.get_chain_potentials(policy, env)
-        log_posterior_proba = compute_normalisation_chain(np.log(unary), np.log(binary))
+        log_posterior_proba = compute_chain_normalization(np.log(unary), np.log(binary))
         return - np.log(prior_proba) - log_posterior_proba
     res = optimize.minimize(w_exact_posterior, x0 = mu)
     return res.x
@@ -139,7 +139,7 @@ def mle_w(actions : np.ndarray, observations : np.ndarray, eta : float, env : En
     def w_exact_posterior(w):
         policy = softmax(q_function(linear_reward_function(w , features), trans_matx, gamma), eta)
         unary, binary = traj.get_chain_potentials(policy, env)
-        log_posterior_proba = compute_normalisation_chain(np.log(unary), np.log(binary))
+        log_posterior_proba = compute_chain_normalization(np.log(unary), np.log(binary))
         return - log_posterior_proba
     res = optimize.minimize(w_exact_posterior, x0 = np.zeros(n))
     return res.x

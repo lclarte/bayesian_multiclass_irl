@@ -4,7 +4,7 @@
 from scipy.special import logsumexp
 import numpy as np
 
-def compute_normalisation_chain(log_psi_1 : np.ndarray, log_psi_2 : np.ndarray):
+def compute_chain_normalization(log_psi_1 : np.ndarray, log_psi_2 : np.ndarray):
 	"""
 	Compute THE LOG OF the normalization constant given the potentials. Compute forward 
 	and backward messages then compute the marginals and lastly partition
