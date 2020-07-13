@@ -1,10 +1,14 @@
 from scipy import stats, optimize
-import numpy as np
-from model import *
-from environnement import DirichletProcess, Environment, Trajectory
-from bp import *
 
-def trajectory_conditional_likelihood(states, actions, observations, policy, env : Environment):
+import numpy as np
+
+
+from core.environnement import *
+from core.bp import *
+from core.policy import *
+from core.trajectory import *
+
+def trajectory_conditional_likelihood(states, obstraj : ObservedTrajectory, policy, env : Environment):
     """
     Calcule la vraisemblance (non normalisee par p(o_t | w) !!!!) d'une trajectoire conditionne aux observations et au vecteur w qui nous donne 
     la reward function
@@ -14,10 +18,10 @@ def trajectory_conditional_likelihood(states, actions, observations, policy, env
         - policy          : matrice S x A 
         - env 
     """
-    assert len(states) == len(actions) + 1
-    T = len(actions)
+    T = len(states) - 1
 
     initial_distribution, trans_matx, obs_matx = env.init_dist, env.trans_matx, env.obsvn_matx
+    actions, observations = obstraj.actoins, obstraj.observations
 
     # calculer p(\tau | policy )
     p_tau_policy = initial_distribution[states[0]]
@@ -97,7 +101,7 @@ def trajectories_to_state_occupation(trajectories, S):
             avg_occ[t, traj[t]] += 1.
     return avg_occ / float(len(trajectories))
 
-def map_w_from_map_trajectory(states, actions, mu, Sigma, eta : float, env :Environment):
+def map_w_from_map_trajectory(states, actions, mu : np.ndarray, Sigma : np.ndarray, eta : float, env :Environment):
     """
     Remarque : Il n'est pas assure que le w est un MAP sachant les observations !
     Donc il faudrait trouver une méthode plus exacte. 
@@ -114,37 +118,38 @@ def map_w_from_map_trajectory(states, actions, mu, Sigma, eta : float, env :Envi
     res = optimize.minimize(minus_log_penalized_likelihood, x0 = mu)
     return res.x
 
-def map_w_from_observations(actions : np.ndarray, observations : np.ndarray, mu : np.ndarray, Sigma : np.ndarray, eta : float, env : Environment):
+def map_w_from_observations(traj : ObservedTrajectory, mu : np.ndarray, Sigma : np.ndarray, eta : float, env : Environment):
     """
     Retourne le MAP (en utilisant de la gradient descent) de w a partir de p(w | mu, Sigma)* \sum_{trajs} p(obs | traj) * p(traj | w)
     """
     features, trans_matx, gamma = env.features, env.trans_matx, env.gamma
-    traj = Trajectory(actions = actions, observations = observations)
+
     def w_exact_posterior(w):
         policy = softmax(q_function(linear_reward_function(w , features), trans_matx, gamma), eta)
         prior_proba = stats.multivariate_normal.pdf(w, mean=mu, cov=Sigma)
-        unary, binary = traj.get_chain_potentials(policy, env)
+        unary, binary = get_chain_potentials(traj, policy, env)
         log_posterior_proba = compute_chain_normalization(np.log(unary), np.log(binary))
         return - np.log(prior_proba) - log_posterior_proba
     res = optimize.minimize(w_exact_posterior, x0 = mu)
     return res.x
 
-def mle_w(actions : np.ndarray, observations : np.ndarray, eta : float, env : Environment):
+def mle_w(traj : ObservedTrajectory, eta : float, env : Environment):
     """
     Retourne le MAP (en utilisant de la gradient descent) de w a partir de p(w | mu, Sigma)* \sum_{trajs} p(obs | traj) * p(traj | w)
     """
     features, trans_matx, gamma = env.features, env.trans_matx, env.gamma
     _, _, n = features.shape
-    traj = Trajectory(actions = actions, observations = observations)
+    
     def w_exact_posterior(w):
         policy = softmax(q_function(linear_reward_function(w , features), trans_matx, gamma), eta)
-        unary, binary = traj.get_chain_potentials(policy, env)
+        unary, binary = get_chain_potentials(traj, policy, env)
         log_posterior_proba = compute_chain_normalization(np.log(unary), np.log(binary))
         return - log_posterior_proba
+    
     res = optimize.minimize(w_exact_posterior, x0 = np.zeros(n))
     return res.x
 
-def mh_transition_trajectories(current_traj, candidate_traj, observations, policy, env):
+def mh_transition_trajectories(current_states : np.ndarray, candidate_states : np.ndarray, obstraj : ObservedTrajectory, policy : np.ndarray, env : Environment):
     """
     A partir de deux trajectoires, accepte l'une ou l'autre selon la formule de transition de Metropolis Hastings
     parameters :   
@@ -155,11 +160,8 @@ def mh_transition_trajectories(current_traj, candidate_traj, observations, polic
     """
     trans_matx, obs_matx, initial_distribution = env.trans_matx, env.obs_matx, env
 
-    current_states, current_actions = current_traj['states'], current_traj['actions']
-    candidate_states, candidate_actions = candidate_traj['states'], candidate_traj['actions']
-
-    like_current = trajectory_conditional_likelihood(current_states, current_actions, observations, policy, env)
-    like_candidate = trajectory_conditional_likelihood(candidate_states, candidate_actions, observations, policy, env)
+    like_current = trajectory_conditional_likelihood(current_states, obstraj, policy, env)
+    like_candidate = trajectory_conditional_likelihood(candidate_states, obstraj, policy, env)
 
     return np.random.binomial(n=1, p = min(1., like_candidate / like_current))
 

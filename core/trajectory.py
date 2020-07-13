@@ -1,5 +1,8 @@
+from typing import NamedTuple
+
 import numpy as np
-from environnement import Environment
+
+from core.environnement import Environment
 
 class ObservedTrajectory(NamedTuple):
     observations : np.ndarray
@@ -8,7 +11,7 @@ class ObservedTrajectory(NamedTuple):
     def check_valid(self):
         return len(self.actions) == len(self.observations)
 
- def get_chain_potentials(traj : ObservedTrajectory, policy : np.ndarray, env : Environment):
+def get_chain_potentials(traj : ObservedTrajectory, policy : np.ndarray, env : Environment):
         """
         Retourne les potentiels binaires et unaires d'une chaine ou les variables a inférer sont les états
         et les variables observées sont les observations et les actions.

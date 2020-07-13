@@ -1,6 +1,5 @@
 from scipy import stats, optimize
 import numpy as np
-from model import *
 
 def linear_reward_function(w, basis):
     """
@@ -32,3 +31,24 @@ def softmax(q_function, eta):
     """
     e = np.exp(eta * q_function)
     return e / e.sum(axis=1)[:, None]
+
+def sample_trajectory(rho_0, policy, transition, T):
+    """
+    Rmque : renvoie un etat de plus que d'actions (car il n'y a pas d'action pour le dernier step de la traj)
+    parameters:
+        rho_0 : vecteur de taille S, distribution sur les etats
+        policy : matrice de taille S x A, normalise sur le deuxieme axe
+        transition : matrice S x A x S
+    returns : 
+        - states : liste de longueur (T+1), valeurs dans [0, S-1]
+        - actions : liste de longueur T, valeurs dans [0, A-1]
+    """
+    S, A = policy.shape
+    states, actions = [np.random.choice(S, p=rho_0)], []
+    for t in range(T):
+        state = states[-1]
+        action = np.random.choice(A, p=policy[state])
+        next_state = np.random.choice(S, p=transition[state, action])
+        states.append(next_state)
+        actions.append(action)
+    return states, actions
