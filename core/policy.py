@@ -32,7 +32,7 @@ def softmax(q_function, eta):
     e = np.exp(eta * q_function)
     return e / e.sum(axis=1)[:, None]
 
-def sample_trajectory(rho_0, policy, transition, T):
+def sample_trajectory(rho_0, policy, transition, T) -> (np.ndarray, np.ndarray):
     """
     Rmque : renvoie un etat de plus que d'actions (car il n'y a pas d'action pour le dernier step de la traj)
     parameters:

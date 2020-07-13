@@ -11,7 +11,7 @@ class Environment(NamedTuple):
     Taille des matrices : 
         - trans_matx : S x A x S
         - obsvn_matx : S x A x O
-        - features   : S x A
+        - features   : S x A x n
         - init_dist  : S
     """
     trans_matx : np.ndarray
@@ -23,7 +23,7 @@ class Environment(NamedTuple):
     def check_compatible_sizes(self):
         S1, A1, S2 = self.trans_matx.shape
         S3, A2, O  = self.obsvn_matx.shape
-        S4, A3     = self.features.shape
+        S4, A3, _  = self.features.shape
         S5         = self.init_dist.shape
 
         return (S1 == S2 == S3 == S4 == S5) and (A1 == A2 == A3)
@@ -60,3 +60,10 @@ def noisy_id_observation_matrix(S, A, O,  eps=0.1):
     for a in range(A):
         obs[:, a, :] = (1. - eps)*np.eye(S) + (eps / S) * np.ones((S, O))
     return obs
+
+def get_observations_from_states_actions(states, actions, obsvn_matx) -> np.ndarray:
+    assert len(states) == len(actions) + 1
+    T = len(actions)
+    S, A, O = obsvn_matx.shape
+    # o_t = f(a_t, s_{t+1})
+    return np.array([np.random.choice(O, p=obsvn_matx[states[i+1], actions[i]]) for i in range(T)])

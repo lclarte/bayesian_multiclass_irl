@@ -22,6 +22,7 @@ def get_chain_potentials(traj : ObservedTrajectory, policy : np.ndarray, env : E
         # binary[t] : entre s_t et s_{t+1}
         unary, binary = np.zeros(shape=(T+1, S)), np.zeros(shape=(T, S, S))
         # first state is special case
+        print(policy[:, traj.actions[0]].shape, env.init_dist[:].shape) ; input()
         unary[0, :] = policy[:, traj.actions[0]] * env.init_dist[:]
         for t in range(1, T+1):
             if t == T:
