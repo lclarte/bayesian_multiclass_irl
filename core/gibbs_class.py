@@ -34,9 +34,9 @@ def posterior_class_gibbs_sampling(m : int, ws : np.ndarray, curr_c : List, cand
     # manque le facteur de normalisation => faire du MH
     return factor * proba_class
 
-def gibbs_class_helper(prior_niw : niw.NIWParams, posterior_niw : niw.NIWParams):
+def posterior_prior_ratio(prior_niw : niw.NIWParams, posterior_niw : niw.NIWParams):
     """
-    Equation de la section 8.3 dans https://hal.inria.fr/inria-00475214/document
+    Integrale dans la 1ere equa° la section 8.3 dans https://hal.inria.fr/inria-00475214/document
     """
     mu_0, k_0, Sigma_0, nu_0 = prior_niw
     mu_p, k_p, Sigma_p, nu_p = posterior_niw
@@ -70,8 +70,7 @@ def posterior_class_integral(m : int, ws : np.ndarray, curr_c : List, cand_c : i
 
     # step 2 : compute posterior params 
     posterior_niw = niw.niw_posterior_params(prior_niw, c_ws)
-    mu_p, k_p, Sigma_p, nu_p = posterior_niw
 
-    proba = gibbs_class_helper(prior_niw, posterior_niw)
+    proba = posterior_prior_ratio(prior_niw, posterior_niw)
 
     return proba
