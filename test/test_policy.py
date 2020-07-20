@@ -28,6 +28,7 @@ class TestPolicy(unittest.TestCase):
     def test_softmax_not_NaN(self):
         """
         Teste qu'il n'y a pas de cas ou la fonction q* renvoie Nan
+        TODO : Remplacer par deux tests, l'un pour la fonction softmax, l'autre pour la fonction q_star 
         """
         correct = True
         # run trials for certain number of steps

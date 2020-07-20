@@ -1,7 +1,8 @@
 import unittest
 import sys
+sys.path.append("..")
 
-from ..core import dirichletprocess
+import core.dirichletprocess as dirichletprocess
 
 class TestDirichletProcess(unittest.TestCase):
     def setUp(self):

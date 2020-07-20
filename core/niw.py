@@ -3,12 +3,18 @@ from typing import NamedTuple
 import numpy as np
 import scipy.stats as stats
 
-
 class NIWParams(NamedTuple):
     mu_mean : np.array
     mu_scale : float
     Sigma_mean : np.ndarray
     Sigma_scale : float
+
+def default_niw_prior(n) -> NIWParams:
+    mu_mean = np.zeros(n)
+    mu_scale = 1.
+    Sigma_mean = np.eye(n)
+    Sigma_scale = float(n)
+    return NIWParams(mu_mean = mu_mean, mu_scale = mu_scale, Sigma_mean = Sigma_mean, Sigma_scale = Sigma_scale)
 
 def sample_niw(params : NIWParams, size) -> (np.ndarray, np.ndarray):
     """

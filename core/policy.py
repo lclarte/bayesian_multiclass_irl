@@ -1,4 +1,5 @@
 from scipy import stats, optimize
+from scipy.special import logsumexp
 import numpy as np
 
 def linear_reward_function(w, basis):
@@ -27,10 +28,13 @@ def q_function(reward_function, transition, gamma):
 def softmax(q_function, eta):
     """
     Retourne la matrice np.exp(\eta * Q[s, a]) / (Normalisation_sur_a). Cette matrice represente la policy avec une 
-    certaine q_function 
+    certaine q_function.
+    Fais les calculs dans "le log" pour eviter les inf et nan dus aux exponentielles trop grosses (exp(1000) par ex.)
     """
-    e = np.exp(eta * q_function)
-    return e / e.sum(axis=1)[:, None]
+    # log du numerateur du softmax
+    log_num = eta * q_function
+    return_array = log_num - logsumexp(log_num, axis=1)[:, None] 
+    return np.exp(return_array)
 
 def sample_trajectory(rho_0, policy, transition, T) -> (np.ndarray, np.ndarray):
     """
