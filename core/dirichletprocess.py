@@ -63,3 +63,14 @@ class DirichletProcess:
                 return self.sample_class_from_probas(block)
             else:
                 block += 1
+
+    def sample_classes(self, size):
+        """
+        Retourne un np array contenant des classes
+        """
+        classes = np.zeros(shape=size, dtype=int)
+        it = np.nditer(classes, flags=['multi_index'])
+        for indx in it:
+            indx = it.multi_index
+            classes[indx] = self.sample_class()
+        return classes
