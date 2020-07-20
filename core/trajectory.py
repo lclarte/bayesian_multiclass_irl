@@ -17,17 +17,19 @@ def get_chain_potentials(traj : ObservedTrajectory, policy : np.ndarray, env : E
         et les variables observées sont les observations et les actions.
         Ces potentiels sont conditionnés par la police et les matrices de transition / observation 
         """
+        assert len(traj.actions) == len(traj.observations), str(len(traj.actions)) + " " + str(len(traj.observations))
+
         T = len(traj.observations)
         S, A, _ = env.trans_matx.shape
         # binary[t] : entre s_t et s_{t+1}
         unary, binary = np.zeros(shape=(T+1, S)), np.zeros(shape=(T, S, S))
         # first state is special case
-        print(policy[:, traj.actions[0]].shape, env.init_dist[:].shape) ; input()
-        unary[0, :] = policy[:, traj.actions[0]] * env.init_dist[:]
+        unary[0, :] = policy[:, traj.actions[0]] * env.init_dist
         for t in range(1, T+1):
             if t == T:
+                # pas de decision prise a ce moment la (pas de policy[ ... ])
                 unary[T] = env.obsvn_matx[:, traj.actions[T-1], traj.observations[T-1]] 
-            else:
+            else: # t <= T - 1
                 unary[t] = policy[:, traj.actions[t]] * env.obsvn_matx[:, traj.actions[t-1], traj.observations[t-1]]
             binary[t-1] = env.trans_matx[:, traj.actions[t-1], :]
         return unary, binary

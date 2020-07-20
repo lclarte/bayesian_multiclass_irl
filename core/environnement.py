@@ -67,3 +67,11 @@ def get_observations_from_states_actions(states, actions, obsvn_matx) -> np.ndar
     S, A, O = obsvn_matx.shape
     # o_t = f(a_t, s_{t+1})
     return np.array([np.random.choice(O, p=obsvn_matx[states[i+1], actions[i]]) for i in range(T)])
+
+def get_random_environment(S, A, O, n):
+    obsvn_matx = random_observation_matrix(S, A, O)
+    trans_matx = random_transition_matrix(S, A)
+    features = np.random.rand(S, A, n)
+    init_dist = np.zeros(S) 
+    init_dist[0] = 1.
+    return Environment(trans_matx = trans_matx, obsvn_matx = obsvn_matx, features = features, init_dist = init_dist)

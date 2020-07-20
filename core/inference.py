@@ -1,12 +1,13 @@
-from scipy import stats, optimize
+from typing import List
 
 import numpy as np
-
+from scipy import stats, optimize, special
 
 from core.environnement import *
 from core.bp import *
 from core.policy import *
 from core.trajectory import *
+from core.niw import *
 
 def trajectory_conditional_likelihood(states, obstraj : ObservedTrajectory, policy, env : Environment):
     """

@@ -53,7 +53,6 @@ def get_environnement(p):
                             # take default gamma 0.9
                             )
 
-
 def scmtirl(p):
     """
     Single class multitask IRL (SCMTIRL)
@@ -86,17 +85,34 @@ def scmtirl(p):
         reward_function = env.features.dot(ws[i])
         pol = policy.softmax(policy.q_function(reward_function, env.trans_matx, env.gamma), eta)
         states[i], actions[i] = policy.sample_trajectory(env.init_dist, pol, env.trans_matx, T)
-        observations[i] = environnement.get_observations_from_states_actions(states[i], actions[i], env.trans_matx)
+        observations[i] = environnement.get_observations_from_states_actions(states[i], actions[i], env.obsvn_matx)
     #
     # Essai 1 : on va simplement inferer le MAP des ws a partir du prior, puis faire du posterior de Normal Inverse Wishart a partir de ces ws
     #
     for i in range(k):
-        ws[i] = inference.map_w_from_observations(trajectory.ObservedTrajectory(states, actions), mu_0, Sigma_0, eta, env)
+        ws[i] = inference.map_w_from_observations(trajectory.ObservedTrajectory(actions = actions[i], observations = observations[i]), mu_0, Sigma_0, eta, env)
     posterior_params = niw.niw_posterior_params(prior, ws)
 
+    print('Version 1 (simple)')
+    print('True value of mu : ', mu)
     print('Posterior of mu : ', posterior_params.mu_mean)
 
+    #
+    # Essai 2 : on va itérer : estimer le MAP de mu, Sigma puis reestimer les ws a partir de l'estimation (mu, Sigma) 
+    #
+    ws = np.zeros_like(ws)
+    current_mu, current_Sigma = mu_0, Sigma_0
+    N = 5
+    for n in range(N):
+        for i in range(k):
+            ws[i] = inference.map_w_from_observations(trajectory.ObservedTrajectory(actions = actions[i], observations = observations[i]), current_mu, current_Sigma, eta, env)
+        posterior_params = niw.niw_posterior_params(prior, ws)
+        current_mu, current_Sigma = posterior_params.mu_mean, posterior_params.Sigma_mean / posterior_params.mu_scale
 
+    print('Version 2 (iterated)')
+    print('True value of mu : ', mu)
+    print('Posterior of mu : ', current_mu)
 
 if __name__ == "__main__":
+    np.seterr(divide = 'ignore')
     scmtirl(parameters)
