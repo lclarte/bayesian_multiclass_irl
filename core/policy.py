@@ -56,3 +56,7 @@ def sample_trajectory(rho_0, policy, transition, T) -> (np.ndarray, np.ndarray):
         states.append(next_state)
         actions.append(action)
     return states, actions
+
+def sample_trajectory_from_w(rho_0, w, basis, transition, gamma, eta, T):
+    policy = softmax(q_function(linear_reward_function(w, basis), transition, gamma), eta)
+    return sample_trajectory(rho_0, policy, transition, T)

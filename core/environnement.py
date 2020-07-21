@@ -75,3 +75,11 @@ def get_random_environment(S, A, O, n):
     init_dist = np.zeros(S) 
     init_dist[0] = 1.
     return Environment(trans_matx = trans_matx, obsvn_matx = obsvn_matx, features = features, init_dist = init_dist)
+
+def get_observable_random_environment(S, A, O, n):
+    obsvn_matx = noisy_id_observation_matrix(S, A, O, eps=0.)
+    trans_matx = random_transition_matrix(S, A)
+    features = np.random.rand(S, A, n)
+    init_dist = np.zeros(S) 
+    init_dist[0] = 1.
+    return Environment(trans_matx = trans_matx, obsvn_matx = obsvn_matx, features = features, init_dist = init_dist)
