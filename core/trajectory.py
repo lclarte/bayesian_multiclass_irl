@@ -1,8 +1,10 @@
 from typing import NamedTuple
 
 import numpy as np
+import scipy.stats as stats
 
 from core.environnement import Environment
+from core.niw import MultivariateParams
 
 class ObservedTrajectory(NamedTuple):
     observations : np.ndarray
@@ -11,11 +13,21 @@ class ObservedTrajectory(NamedTuple):
     def check_valid(self):
         return len(self.actions) == len(self.observations)
 
+class CompleteTrajectory(NamedTuple):
+    states : np.ndarray
+    actions : np.ndarray
+    observations : np.ndarray
+
+    def check_valid(self):
+        return len(self.actions) == len(self.observations) == len(self.states) - 1
+
 def get_chain_potentials(traj : ObservedTrajectory, policy : np.ndarray, env : Environment):
         """
         Retourne les potentiels binaires et unaires d'une chaine ou les variables a inférer sont les états
         et les variables observées sont les observations et les actions.
         Ces potentiels sont conditionnés par la police et les matrices de transition / observation 
+        Permet de calculer la proba conditionnelle P(s_1, ..., s_T | a_1, ..., a_T, o_1, ..., o_T)
+        NORMALEMENT, NE PERMET PAS DE CALCULER LE MAP DE W via sa normalisation
         """
         assert len(traj.actions) == len(traj.observations), str(len(traj.actions)) + " " + str(len(traj.observations))
 
