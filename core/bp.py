@@ -29,6 +29,9 @@ def compute_chain_normalization(log_psi_1 : np.ndarray, log_psi_2 : np.ndarray):
 		# marginal distributions
 		log_probas = forward_messages + backward_messages + log_psi_1
 		# compute the log_Z using marginal at last node 
-	except: 
-		print("Error in chain normalization")
-	return logsumexp(log_probas[-1])
+		return logsumexp(log_probas[-1])
+	except Exception as e: 
+		print("Error in chain normalization : ")
+		print(e)
+		return 0.
+
