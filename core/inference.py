@@ -43,12 +43,49 @@ def trajectory_likelihood_policy(states, actions, policy):
     Retourne la vraisemblance de la trajectoire donnee en fonction de la policy, c'est a dire le produit 
     des probas \pi( a_t | s_t ), ne prend pas en compte la distribution initiale ni la transition de l'
     environnement. 
+    ATTENTION : POUR CALCULER LA PROBA POSTERIEURE DE w, il faut justement prendre en compte la transition de l'env + distrib° initiale
     """
     likelihood = 1.
     T = len(actions)
     for t in range(T):
         likelihood *= policy[states[t], actions[t]]
     return likelihood
+
+def complete_trajectory_log_likelihood(traj : CompleteTrajectory, w : np.ndarray, env : Environment, eta : float) -> float:
+    # retourne au format logarithmique car sinon pb d'echelle 
+    assert traj.check_valid() == True, "Dimensions of trajectory is invalid"
+    
+    policy = softmax(q_function(linear_reward_function(w, env.features), env.trans_matx, env.gamma), eta)
+    actions, states, observations = traj.actions, traj.states, traj.observations
+    T = len(actions)
+    
+    log_p = 0.
+    log_p += np.log(env.init_dist[states[0]])
+    for t in range(T):
+        log_p += np.log(policy[states[t], actions[t]])
+        log_p += np.log(env.trans_matx[states[t], actions[t], states[t+1]])
+        log_p += np.log(observations[states[t+1], actions[t], observations[t]])
+    return log_p
+
+def observed_trajectory_log_likelihood(otraj : ObservedTrajectory, w : np.ndarray, env : Environment, eta : float) -> float:
+    """
+    log likelihood d'une trajectoire observation = actions & observations en fonction de w
+    """
+    assert otraj.check_valid() == True
+
+    S, A, O = env.obsvn_matx.shape
+    T = len(otraj.actions)
+
+    total_log_p = 0.
+    size = (S, )* (T+1)
+    # iterate over all possible tuples
+    it = np.nditer(np.zeros(size), flags=['multi_index'])
+    for _ in it:
+        indx = it.multi_index
+        states = np.array(indx)
+        traj = CompleteTrajectory(actions = otraj.actions, observations = otraj.observations, states = states)
+        total_log_p += complete_trajectory_log_likelihood(traj, w, env, eta)
+    return total_log_p
 
 def get_trajectory_reward(states, actions, reward_function):
     """
