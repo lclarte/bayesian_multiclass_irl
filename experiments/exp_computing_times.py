@@ -9,98 +9,64 @@ import unittest
 
 import numpy as np
 import matplotlib.pyplot as plt
+from sacred import Experiment
 
 import core.inference as inference
 import core.environnement as environnement
 import core.niw as niw
 import core.policy as policy
 import core.trajectory as trajectory
+import core.metrics as metrics
 
-class ExpComputingTimes:
-    def wrapper(function):
-        @functools.wraps(function)
-        def wrapper(self):
-            self.setUp()
+ex = Experiment('experiment1')
 
-            begin_time = time.time()
-            result = function(self)
-            end_time = time.time()
-            delta_time = end_time - begin_time
-            print('Elapsed time for function' + function.__name__ + ' : ' + str(delta_time))
+
+@ex.config
+def compare_config():
+    S, A, O, n = 10, 2, 5, 2
+    num_ws, T  = 10, 100
+
+@ex.automain
+def compare_states_mle_states_belief(S, A, O, n, num_ws, T):
+    """
+    Compare le calcule posterieur de w avec le MLE des etats avec le posterieur exact base sur les beliefs
+    """
+    env = environnement.get_random_environment(S, A, O, n)
+    mu, Sigma = np.ones(shape=(n,)), np.eye(N=n)
+    eta = 1.0
+
+    # compare for timesteps w/ increments of 10
+    ts = list(range(10, T, 10))
+
+    distances_mle, distances_belief = np.zeros(shape=(len(ts), num_ws)), np.zeros(shape=(len(ts), num_ws))
+
+    for i in range(num_ws):
+        w = np.random.multivariate_normal(mean=mu, cov=Sigma)
+        # sample trajectory from this w 
+        states, actions = policy.sample_trajectory_from_w(env.init_dist, w, env.features, env.trans_matx, env.gamma, eta, T)
+        observations = environnement.get_observations_from_states_actions(states, actions, env.obsvn_matx)
             
-            self.tearDown()
-            return result
-        return wrapper
-    
-    def __init__(self):
-        pass
+        for j in range(len(ts)):
+            t = ts[j]
+            states_belief = inference.get_belief_from_observations(observations[:t], actions[:t], env)
 
-    def setUp(self):
-        self.S, self.A, self.O, self.n, self.T = 20, 5, 10, 5, 50
-        print('Parameters of environment (S, A, O, features_dim, T): ', self.S, self.A,self.O, self.n, self.T)
-        self.env = environnement.get_random_environment(self.S, self.A, self.O, self.n)
-        self.prior_niw = niw.default_niw_prior(self.n)
-        self.nb_mdp = 10
-        
-        self.map_iterations = 5
+            # method 1 : MLE of states
+            states_mle = np.argmax(states_belief, axis=1)
 
-        mu, Sigma = niw.sample_niw(self.prior_niw, size=(1, ))
-        mu, Sigma = mu[0], Sigma[0]
-        self.true_mu = mu
+            w_from_mle = inference.map_w_from_map_trajectory(states_mle, actions[:t], mu, Sigma, eta, env) 
+            w_from_belief = inference.map_w_from_observations(trajectory.ObservedTrajectory(actions = actions[:t], observations = observations[:t]), mu, Sigma, eta, env)
 
-        ws = np.random.multivariate_normal(mu, Sigma, size=(self.nb_mdp))
-        states = np.zeros(shape=(self.nb_mdp, self.T + 1), dtype=int)
-        actions = np.zeros(shape=(self.nb_mdp, self.T), dtype=int)
-        observations = np.zeros(shape=(self.nb_mdp, self.T), dtype=int)
+            # difference for current sample of w
+            dist_mle = metrics.quadratic_ws(w, w_from_mle)
+            dist_belief = metrics.quadratic_ws(w, w_from_belief)
 
-        for i in range(self.nb_mdp):
-            pol = policy.softmax(policy.q_function(policy.linear_reward_function(ws[i], self.env.features), self.env.trans_matx, self.env.gamma), eta=1.)
-            states[i], actions[i] = policy.sample_trajectory(self.env.init_dist, pol, self.env.trans_matx, self.T)
-            observations[i] = environnement.get_observations_from_states_actions(states[i], actions[i], self.env.obsvn_matx)
-        self.states = states
-        self.actions = actions
-        self.observations = observations
-        self.ws = ws
+            distances_mle[j, i] = dist_mle
+            distances_belief[j, i] = dist_belief
 
-    def tearDown(self):
-        pass
-    
-    @wrapper
-    def duration_mu_map_from_trajectory_map(self):
-        """
-        Calcule le MAP de mu de maniere iterative, a partir des MAPs des ws et du prior (mu_0, Sigma_0). 
-        Ici, les MAPs des ws sont calcules a partir du MAP des etats s_1, ..., s_T (c'est donc approximatif) 
-        # TODO
-        """
-        mu_0, Sigma_0 = self.prior_niw.mu_mean, self.prior_niw.Sigma_mean
-        mu_curr, Sigma_curr = mu_0, Sigma_0
-        a = 2 # ou a = self.nb_mdp
+    average_dist_mle = np.mean(distances_mle, axis=1)
+    average_dist_belief = np.mean(distances_belief, axis=1)
 
-        states_map = np.zeros_like(self.states)
-        ws_map = np.zeros_like(self.ws)
-        
-        for i in range(a):
-            states_map[i] = np.argmax(inference.get_belief_from_observations(self.observations[i], self.actions[i], self.env), axis=1)
-
-        for k in range(self.map_iterations):
-            for i in range(a):
-                ws_map[i] = inference.map_w_from_map_trajectory(states_map[i], self.actions[i], mu_curr, Sigma_curr, 1., self.env)
-
-            niw_posterior = niw.niw_posterior_params(self.prior_niw, ws_map[:a])
-            mu_curr, Sigma_curr = niw_posterior.mu_mean, niw_posterior.Sigma_mean / niw_posterior.mu_scale
-
-        print('True mu : ', self.true_mu)
-        print('Posterior mu : ', mu_curr)
-
-    @wrapper
-    def duration_mu_map_from_belief(self):
-        """
-        Calcule le MAP de mu de maniere iterative, a partir des MAPs des ws et du prior (mu_0, Sigma_0). 
-        Ici, les MAPS des ws sont calcules a partir du belief = distribution posterieure exacte des etats {s_t}_t
-        # TODO
-        """
-        pass
-
-if __name__ == "__main__":
-    exp = ExpComputingTimes()
-    result = exp.duration_mu_map_from_trajectory_map()
+    plt.plot(ts, average_dist_mle, label='w using MLE of states')
+    plt.plot(ts, average_dist_belief, label='w using Belief of states')
+    plt.legend()
+    plt.show()
