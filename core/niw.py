@@ -9,6 +9,13 @@ class NIWParams(NamedTuple):
     Sigma_mean : np.ndarray
     Sigma_scale : float
 
+class MultivariateParams(NamedTuple):
+    mu : np.array
+    Sigma : np.array
+
+    def check_valid(self):
+        return len(self.mu) == self.Sigma.shape[0] == self.Sigma.shape[1]
+
 def default_niw_prior(n) -> NIWParams:
     mu_mean = np.zeros(n)
     mu_scale = 1.
