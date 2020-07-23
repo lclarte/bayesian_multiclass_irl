@@ -64,7 +64,7 @@ def complete_trajectory_log_likelihood(traj : CompleteTrajectory, w : np.ndarray
     for t in range(T):
         log_p += np.log(policy[states[t], actions[t]])
         log_p += np.log(env.trans_matx[states[t], actions[t], states[t+1]])
-        log_p += np.log(observations[states[t+1], actions[t], observations[t]])
+        log_p += np.log(env.obsvn_matx[states[t+1], actions[t], observations[t]])
     return log_p
 
 def observed_trajectory_log_likelihood(otraj : ObservedTrajectory, w : np.ndarray, env : Environment, eta : float) -> float:
@@ -154,7 +154,6 @@ def new_map_w_from_map_trajectory(ctraj : CompleteTrajectory, mu : np.ndarray, S
     
     res = optimize.minimize(minus_log_penalized_likelihood, x0 = mu)
     return res.x
-
 
 def map_w_from_map_trajectory(states, actions, mu : np.ndarray, Sigma : np.ndarray, eta : float, env :Environment):
     """
