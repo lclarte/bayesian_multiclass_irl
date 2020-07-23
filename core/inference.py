@@ -139,6 +139,23 @@ def trajectories_to_state_occupation(trajectories, S):
             avg_occ[t, traj[t]] += 1.
     return avg_occ / float(len(trajectories))
 
+def new_map_w_from_map_trajectory(ctraj : CompleteTrajectory, mu : np.ndarray, Sigma : np.ndarray, eta : float, env :Environment):
+    """
+    Remarque : Il n'est pas assure que le w est un MAP sachant les observations !
+    Donc il faudrait trouver une méthode plus exacte. 
+    """
+    features, trans_matx, gamma = env.features, env.trans_matx, env.gamma
+
+    n = features.shape[-1]
+
+    def minus_log_penalized_likelihood(w):
+        retour = complete_trajectory_log_likelihood(ctraj, w, env, eta) + np.log(stats.multivariate_normal.pdf(w, mean=mu, cov=Sigma) )
+        return -retour
+    
+    res = optimize.minimize(minus_log_penalized_likelihood, x0 = mu)
+    return res.x
+
+
 def map_w_from_map_trajectory(states, actions, mu : np.ndarray, Sigma : np.ndarray, eta : float, env :Environment):
     """
     Remarque : Il n'est pas assure que le w est un MAP sachant les observations !
