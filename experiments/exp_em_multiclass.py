@@ -59,19 +59,18 @@ def main():
     
     env = environnement.get_observable_random_environment(S = 5, A = 2, O = 5, n = n)
 
-    mus = np.array([[1., 0.], [0., 1.]])
-    Sigmas = np.array([Sigma_0, Sigma_0])
+    mus, Sigmas = niw.sample_niw(prior_niw)
     true_classes = [0]*int(M/2) + [1]*int(M/2)
     
+    # current estimation of classes 
     current_classes = [np.random.choice(2) for _ in range(M)]
-    print(current_classes)
-    print("=============")
-
+    
     ws = np.zeros(shape=(M, n))
     for m in range(M):
         c = true_classes[m]
         ws[m] = np.random.multivariate_normal(mus[c], 0.1*Sigmas[c])
 
+    plt.scatter(mus[:, 0], mus[:, 1], marker='*')
     plt.scatter(ws[:, 0], ws[:, 1])
     plt.title("True ws")
     plt.plot()
