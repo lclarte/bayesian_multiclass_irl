@@ -16,18 +16,23 @@ def get_chain_env(S : int, eps=.1) -> environnement.Environment:
     # two actions : go right or stay in same 
     A, O = 2, S
     obsvn_matx = environnement.noisy_id_observation_matrix(S, A, O, eps=0.)
+    
     # transition : avec une certaine proba, on retourne au premier etat
     trans_matx = np.zeros(shape=(S, A, S))
     # action 0 : stay here, action 1 : go right
     for s in range(S-1):
-        trans_matx[s, 0, s+1] = 1 - eps
-        trans_matx[s, 0, 0]   = eps
-        trans_matx[s, 1, s]   = 1-eps
-        trans_matx[s, 1, 0]   = eps
+        trans_matx[s, 0, s+1] += 1 - eps
+        trans_matx[s, 0, 0]   += eps
+        
+        trans_matx[s, 1, s]   += 1 - eps
+        trans_matx[s, 1, 0]   += eps
+        
     trans_matx[S-1, 0, S-1] = trans_matx[S-1, 1, S-1] = 1 - eps
-    trans_matx[S-1, 0, 0] = trans_matx[S-1, 1, 0] = eps
+    trans_matx[S-1, 0, 0]   = trans_matx[S-1, 1, 0]   = eps
+    
     features = np.zeros(shape=(S, A, 2))
     features[S - 1, 0] = features[S - 1, 1] = [1., 0.]
     features[S - 2, 0] = features[S - 2, 1] = [0., 2.]
+    
     init_dist = np.array([1.] + [0.]*(S-1))
     return environnement.Environment(obsvn_matx = obsvn_matx, features = features, trans_matx = trans_matx, init_dist = init_dist)

@@ -23,11 +23,10 @@ class CompleteTrajectory(NamedTuple):
 
 def get_chain_potentials(traj : ObservedTrajectory, policy : np.ndarray, env : Environment):
         """
-        Retourne les potentiels binaires et unaires d'une chaine ou les variables a inférer sont les états
-        et les variables observées sont les observations et les actions.
-        Ces potentiels sont conditionnés par la police et les matrices de transition / observation 
-        Permet de calculer la proba conditionnelle P(s_1, ..., s_T | a_1, ..., a_T, o_1, ..., o_T)
-        NORMALEMENT, NE PERMET PAS DE CALCULER LE MAP DE W via sa normalisation
+        Renvoie les potentiels tels que le produit des potentiels prod_t Psi_1(s_t) * Psi_2 (s_t, s_t+1)
+        renvoie la proba P(s_1, ..., s_T+1, a_1, ..., a_T, o_2, ..., o_T+1 | policy, environnement )
+        Ainsi, pour calculer, P(a_1, ..., o_2, .... | policy environnement) il suffit de sommet sur s = calculer 
+        la constante de normalisation. 
         """
         assert len(traj.actions) == len(traj.observations), str(len(traj.actions)) + " " + str(len(traj.observations))
 
