@@ -32,7 +32,7 @@ def get_chain_env(S : int, eps=.1) -> environnement.Environment:
     
     features = np.zeros(shape=(S, A, 2))
     features[S - 1, 0] = features[S - 1, 1] = [1., 0.]
-    features[S - 2, 0] = features[S - 2, 1] = [0., 2.]
+    features[S - 2, 0] = features[S - 2, 1] = [0., 1.]
     
     init_dist = np.array([1.] + [0.]*(S-1))
     return environnement.Environment(obsvn_matx = obsvn_matx, features = features, trans_matx = trans_matx, init_dist = init_dist)

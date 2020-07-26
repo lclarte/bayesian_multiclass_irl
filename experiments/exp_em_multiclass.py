@@ -9,6 +9,8 @@ sys.path.append("..")
 import numpy as np
 from sklearn import mixture
 import matplotlib.pyplot as plt
+import sacred
+import scipy.stats as stats
 
 import core.niw as niw
 import core.inference as inference
@@ -20,26 +22,9 @@ import core.trajectory as trajectory
 import core.policy as policy
 import core.metrics as metrics
 
-def sample_multiclass_ws(prior_niw : niw.NIWParams, num_classes : int, M : int):
-    n = len(prior_niw.mu_mean)
-    """
-    arguments:
-        - prior_niw : prior pour sampler les (mu, Sigma)
-        - c : nombre de classes (fixe ici pour EM algo)
-        - M : nombre de MDP
-    """
-    classes = np.random.choice(num_classes, size= (M, ))
+import envs.chain as chain
 
-    # sample as many NIW as necessary 
-    mus, Sigmas = niw.sample_niw(prior_niw, size=(num_classes, ))
-
-    ws = np.zeros(shape=(M, n))
-    for m in range(M):
-        c = classes[m]
-        mu, Sigma = mus[c], Sigmas[c]
-        ws[m] = np.random.multivariate_normal(mu, Sigma)
-
-    return mus, Sigmas, classes, ws
+exp = sacred.Experiment("experiment_1")
 
 def compute_trajectories_from_ws(ws : np.ndarray, env : environnement.Environment, eta : float, T : int):
     M, n = ws.shape
@@ -55,51 +40,74 @@ def compute_trajectories_from_ws(ws : np.ndarray, env : environnement.Environmen
 
     return states, actions, observations
 
+def get_class(x, mus, Sigmas) -> int:
+    """
+    retoune la classe associee au x
+    """
+    C = len(mus)
+    return np.argmax([stats.multivariate_normal.pdf(x, mean=mus[c], cov=Sigmas[c])  for c in range(C)])
+
+@exp.automain
 def main():
-    prior_niw  = niw.default_niw_prior(2)
+    n = 2
+
+    prior_niw  = niw.NIWParams(mu_mean = np.zeros(shape=(2, )), mu_scale=1., Sigma_mean = 0.1*np.eye(2), Sigma_scale=1.)
     mu_0, k_0, Sigma_0, nu_0 = prior_niw.mu_mean, prior_niw.mu_scale, prior_niw.Sigma_mean, prior_niw.Sigma_scale
     
-    num_classes, M, T =  4, 25, 500
-    tau, n, eta = 2., 2, 1.0
+    num_classes, M, T =  2, 50, 50
+    tau, eta = 2., 1.0
     
-
     env = environnement.get_observable_random_environment(S = 5, A = 2, O = 5, n = n)
 
-    mus, Sigmas, true_classes, ws = sample_multiclass_ws(prior_niw, num_classes, M)
+    mus = np.array([[1., 0.], [0., 1.]])
+    Sigmas = np.array([Sigma_0, Sigma_0])
+    true_classes = [0]*int(M/2) + [1]*int(M/2)
     
+    current_classes = [np.random.choice(2) for _ in range(M)]
+    print(current_classes)
+    print("=============")
+
+    ws = np.zeros(shape=(M, n))
+    for m in range(M):
+        c = true_classes[m]
+        ws[m] = np.random.multivariate_normal(mus[c], 0.1*Sigmas[c])
+
+    plt.scatter(ws[:, 0], ws[:, 1])
+    plt.title("True ws")
+    plt.plot()
+
     states, actions, observations = compute_trajectories_from_ws(ws, env, eta, T)
-    ws_mle = np.zeros(shape=(M, n))
+    
+    infered_ws = np.zeros(shape=(M, n))
 
     # classe pour estimer les parametres 
     # https://scikit-learn.org/stable/modules/generated/sklearn.mixture.BayesianGaussianMixture.html#sklearn.mixture.BayesianGaussianMixture
-    bgm = mixture.BayesianGaussianMixture(n_components=num_classes, mean_prior=mu_0, mean_precision_prior=k_0, degrees_of_freedom_prior=nu_0, covariance_prior=Sigma_0, 
-    weight_concentration_prior=tau)
+    bgm = mixture.GaussianMixture(n_components=num_classes)
 
-    ts = [25 * k for k in range(1, 7)]
-    distances_w, distances_reward = [], []
-    # On etudie la precision au cours du temps
-    for t in ts:
-        begin = time.time()
-        # Etape 1 : Estimer les ws : dans 1 premier cas, on utilise le MLE
-        for m in range(M):
-            ws_mle[m]  = inference.mle_w(trajectory.ObservedTrajectory(actions = actions[m, :t], observations = observations[m, :t]), eta, env)
-        # Etape 2 : Estimer les parametres 
-        bgm.fit(ws_mle)
-        infered_mus = bgm.means_
+    infered_mus, infered_Sigmas = np.array([[0.5, 0.], [0., 0.5]]), np.array([Sigma_0, Sigma_0])
+
+    # Certain nombre d'iterations de l'algo 
+    for i in range(10):
     
-        # Etape 3 : calculer la distance. Fait a la main pour l'instant 
-        # Pour ce faire, on prend la permutation qui minimise la distance
+        # Etape 1 : Estimer les ws
+        for m in range(M):
+            c = current_classes[m]
+            infered_ws[m] = inference.map_w_from_observations(trajectory.ObservedTrajectory(actions = actions[m], observations = observations[m]), mu_0, Sigma_0, eta, env)
 
-        distances_w_t = [metrics.quadratic_ws(mus, infered_mus[list(p)]) for p in itertools.permutations(range(num_classes))]
-        distances_w.append(min(distances_w_t))
-        print(distances_w[-1])
+        plt.scatter(infered_ws[:, 0], infered_ws[:, 1]) ; plt.show()
 
-        print('Time for ' + str(t) + ' steps of the MDP : ' + str(time.time() - begin))
+        bgm.fit(infered_ws)
+        
+        infered_mus = bgm.means_
+        infered_Sigmas = bgm.covariances_
+        
+        # Mettre a jour les classes ? 
+        for m in range(M):
+            current_classes[m] = get_class(infered_ws[m], mus, Sigmas)
 
-    plt.plot(ts, distances_w)
-    plt.show()
-
-if __name__ == "__main__":
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        main()
+    print(current_classes)
+    print("=============")
+    print(infered_mus)
+    print("=============")
+    print(mus)
+    
