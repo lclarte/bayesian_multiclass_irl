@@ -187,9 +187,12 @@ def map_w_from_observations(traj : ObservedTrajectory, mu : np.ndarray, Sigma : 
     res = optimize.minimize(w_exact_posterior, x0 = mu)
     return res.x
 
+def map_w_from_observations_with_monte_carlo(traj : ObservedTrajectory, niw_params : NIWParams, eta : float, env : Environment) -> np.ndarray:
+    pass
+
 def mle_w(traj : ObservedTrajectory, eta : float, env : Environment):
     """
-    Retourne le MAP (en utilisant de la gradient descent) de w a partir de p(w | mu, Sigma)* \sum_{trajs} p(obs | traj) * p(traj | w)
+    Retourne le MLE (en utilisant de la gradient descent) de w  \sum_{trajs} p(obs | traj) * p(traj | w)
     """
     features, trans_matx, gamma = env.features, env.trans_matx, env.gamma
     _, _, n = features.shape

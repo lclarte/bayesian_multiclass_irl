@@ -21,8 +21,9 @@ class TestDirichletProcess(unittest.TestCase):
         try:
             sample = self.dp.sample_class()
             self.assertTrue(type(sample) == int and sample >= 0)
-        except:
+        except Exception as e:
             print("Sampling from DP failed")
+            print(e)
             self.assertFalse(True)
 
     def test_sample_classes(self):
@@ -30,8 +31,9 @@ class TestDirichletProcess(unittest.TestCase):
             size = (5, 2)
             samples = self.dp.sample_classes(size)
             self.assertTrue(samples.dtype == int and np.all(samples >= 0) and samples.shape == size )
-        except:
-            print("Sampling several classes from DP failed")
+        except Exception as e:
+            print("Sampling several classes from DP failed : ")
+            print(e)
             self.assertFalse(True)
 
 if __name__ == '__main__':

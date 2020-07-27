@@ -51,15 +51,15 @@ def get_class(x, mus, Sigmas) -> int:
 def main():
     n = 2
 
-    prior_niw  = niw.NIWParams(mu_mean = np.zeros(shape=(2, )), mu_scale=1., Sigma_mean = 0.1*np.eye(2), Sigma_scale=1.)
+    prior_niw  = niw.NIWParams(mu_mean = np.zeros(2), mu_scale = .1, Sigma_mean = 0.001*np.eye(2), Sigma_scale = 2)
     mu_0, k_0, Sigma_0, nu_0 = prior_niw.mu_mean, prior_niw.mu_scale, prior_niw.Sigma_mean, prior_niw.Sigma_scale
     
     num_classes, M, T =  2, 50, 50
     tau, eta = 2., 1.0
     
-    env = environnement.get_observable_random_environment(S = 5, A = 2, O = 5, n = n)
+    env = environnement.get_observable_random_environment(5, 2, 5, n)
 
-    mus, Sigmas = niw.sample_niw(prior_niw)
+    mus, Sigmas = niw.sample_niw(prior_niw, size=(2, ))
     true_classes = [0]*int(M/2) + [1]*int(M/2)
     
     # current estimation of classes 
@@ -72,8 +72,9 @@ def main():
 
     plt.scatter(mus[:, 0], mus[:, 1], marker='*')
     plt.scatter(ws[:, 0], ws[:, 1])
+
     plt.title("True ws")
-    plt.plot()
+    plt.show()
 
     states, actions, observations = compute_trajectories_from_ws(ws, env, eta, T)
     
@@ -81,32 +82,38 @@ def main():
 
     # classe pour estimer les parametres 
     # https://scikit-learn.org/stable/modules/generated/sklearn.mixture.BayesianGaussianMixture.html#sklearn.mixture.BayesianGaussianMixture
-    bgm = mixture.GaussianMixture(n_components=num_classes)
+    bgm = mixture.BayesianGaussianMixture(n_components=num_classes, mean_prior = mu_0, covariance_prior = Sigma_0, degrees_of_freedom_prior = nu_0, mean_precision_prior = k_0)
 
-    infered_mus, infered_Sigmas = np.array([[0.5, 0.], [0., 0.5]]), np.array([Sigma_0, Sigma_0])
+    infered_mus, infered_Sigmas = np.array([mu_0, mu_0]), np.array([Sigma_0, Sigma_0])
 
     # Certain nombre d'iterations de l'algo 
-    for i in range(10):
+    for i in range(1):
     
         # Etape 1 : Estimer les ws
         for m in range(M):
             c = current_classes[m]
-            infered_ws[m] = inference.map_w_from_observations(trajectory.ObservedTrajectory(actions = actions[m], observations = observations[m]), mu_0, Sigma_0, eta, env)
-
-        plt.scatter(infered_ws[:, 0], infered_ws[:, 1]) ; plt.show()
+            infered_ws[m] = inference.map_w_from_observations(trajectory.ObservedTrajectory(actions = actions[m], observations = observations[m]), infered_mus[c], infered_Sigmas[c], eta, env)
 
         bgm.fit(infered_ws)
         
         infered_mus = bgm.means_
-        infered_Sigmas = bgm.covariances_
+        infered_nus = bgm.degrees_of_freedom_
+
+        for c in range(2):
+            # moyenne de la loi inverse Wishart de param (Sigma, nu) = Sigma / (nu - p - 1 ) avec p = 2 la dimension 
+            infered_Sigmas[c] = bgm.covariances_[c] / (infered_nus[c] - 3)
         
         # Mettre a jour les classes ? 
         for m in range(M):
             current_classes[m] = get_class(infered_ws[m], mus, Sigmas)
 
-    print(current_classes)
-    print("=============")
+    print("==== INFERED MUS ====")
     print(infered_mus)
-    print("=============")
+    print("==== TRUE MUS ====")
     print(mus)
+    print('==== INFERED SIGMAS ==== ')
+    print(infered_Sigmas)
+    print('==== OTHERS ====')
+    print(bgm.mean_precision_)
+    print(bgm.degrees_of_freedom_)
     

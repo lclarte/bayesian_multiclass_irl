@@ -39,6 +39,8 @@ class DirichletProcess:
         self.betas = np.concatenate((self.betas, betas))
         self.probas = np.concatenate((self.probas, probas))
         self.probas_sum.append(np.sum(probas))
+        if not (1 >= self.probas_sum[-1] >= 0.):
+            raise Exception("Probas in block do not sum to 1 for sampling from stick-breaking DP")
 
     def sample_class_from_probas(self, block):
         """
@@ -56,8 +58,10 @@ class DirichletProcess:
         """
         block = 0
         while True:
+            # Ajouter des classes si le bloc courant est au dela du nombre de blocs
             while block >= len(self.probas_sum):
                 self.add_betas_probas()
+            # on teste si on va tirer la classe du bloc courant 
             sample_from_current_block = np.random.binomial(1, p=self.probas_sum[block])
             if sample_from_current_block == 1:
                 return self.sample_class_from_probas(block)
