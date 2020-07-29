@@ -180,15 +180,37 @@ def map_w_from_observations(traj : ObservedTrajectory, mu : np.ndarray, Sigma : 
 
     def w_exact_posterior(w):
         policy = softmax(q_function(linear_reward_function(w , features), trans_matx, gamma), eta)
+
         prior_proba = stats.multivariate_normal.pdf(w, mean=mu, cov=Sigma)
         unary, binary = get_chain_potentials(traj, policy, env)
         log_posterior_proba = compute_chain_normalization(np.log(unary), np.log(binary))
+    
         return - np.log(prior_proba) - log_posterior_proba
+    
     res = optimize.minimize(w_exact_posterior, x0 = mu)
     return res.x
 
 def map_w_from_observations_with_monte_carlo(traj : ObservedTrajectory, niw_params : NIWParams, eta : float, env : Environment) -> np.ndarray:
-    pass
+    
+    features, trans_matx, gamma = env.features, env.trans_matx, env.gamma
+    M, n = 50, env.features.shape[-1]
+    mus_log = np.zeros(shape=(M, n))
+    Sigmas_log = np.zeros(shape=(M, n, n))
+
+    def w_posterior(w):
+        policy = softmax(q_function(linear_reward_function(w , features), trans_matx, gamma), eta)
+        
+        unary, binary = get_chain_potentials(traj, policy, env)
+        log_posterior_proba = compute_chain_normalization(np.log(unary), np.log(binary))
+        log_prior_proba = np.log(monte_carlo_niw_likelihood(w, niw_params, M, mus_log, Sigmas_log))
+        return -1 * log_posterior_proba - log_prior_proba
+
+    res = optimize.minimize(w_posterior, x0 = niw_params.mu_mean)
+    if np.isnan(res.x).any():
+        print(res.x, '. Minimization is successul ? ', res.success)
+    else:
+        print(res.x )
+    return res.x
 
 def mle_w(traj : ObservedTrajectory, eta : float, env : Environment):
     """
