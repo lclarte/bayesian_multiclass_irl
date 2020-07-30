@@ -32,5 +32,11 @@ class TestNIW(unittest.TestCase):
         """
         pass
 
+    def test_norminvwishart_pdf(self):
+        """
+        TODO : Teste que la likelihood de la loi normale inverse wishart marche bien 
+        """
+        pass
+
 if __name__ == '__main__':
     unittest.main()
