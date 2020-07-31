@@ -28,7 +28,7 @@ def measure_time(func):
         return result, time.time() - begin_time
     return wrapped
 
-timed_map_w_from_map_trajectory = measure_time(inference.map_w_from_map_trajectory)
+timed_map_w_from_map_trajectory = measure_time(inference.map_w_from_mle_trajectory)
 timed_map_w_from_observations = measure_time(inference.map_w_from_observations)
 
 @ex.config

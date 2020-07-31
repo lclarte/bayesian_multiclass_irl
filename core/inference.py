@@ -38,19 +38,6 @@ def trajectory_conditional_likelihood(states, obstraj : ObservedTrajectory, poli
 
     return p_tau_policy * p_obs_tau
 
-def trajectory_likelihood_policy(states, actions, policy):
-    """
-    Retourne la vraisemblance de la trajectoire donnee en fonction de la policy, c'est a dire le produit 
-    des probas \pi( a_t | s_t ), ne prend pas en compte la distribution initiale ni la transition de l'
-    environnement. 
-    ATTENTION : POUR CALCULER LA PROBA POSTERIEURE DE w, il faut justement prendre en compte la transition de l'env + distrib° initiale
-    """
-    likelihood = 1.
-    T = len(actions)
-    for t in range(T):
-        likelihood *= policy[states[t], actions[t]]
-    return likelihood
-
 def complete_trajectory_log_likelihood(traj : CompleteTrajectory, w : np.ndarray, env : Environment, eta : float) -> float:
     # retourne au format logarithmique car sinon pb d'echelle 
     assert traj.check_valid() == True, "Dimensions of trajectory is invalid"
@@ -139,41 +126,11 @@ def trajectories_to_state_occupation(trajectories, S):
             avg_occ[t, traj[t]] += 1.
     return avg_occ / float(len(trajectories))
 
-def new_map_w_from_mle_trajectory(ctraj : CompleteTrajectory, mu : np.ndarray, Sigma : np.ndarray, eta : float, env :Environment):
-    """
-    Remarque : Il n'est pas assure que le w est un MAP sachant les observations !
-    Donc il faudrait trouver une méthode plus exacte. 
-    """
-    features, trans_matx, gamma = env.features, env.trans_matx, env.gamma
+"""
+Ci-dessous, inference du vecteur de poids w en fonction des trajectoires observees / etats inferes 
+"""
 
-    n = features.shape[-1]
-
-    def minus_log_penalized_likelihood(w):
-        retour = complete_trajectory_log_likelihood(ctraj, w, env, eta) + np.log(stats.multivariate_normal.pdf(w, mean=mu, cov=Sigma) )
-        return -retour
-    
-    res = optimize.minimize(minus_log_penalized_likelihood, x0 = mu)
-    return res.x
-
-def map_w_from_mle_trajectory(states, actions, mu : np.ndarray, Sigma : np.ndarray, eta : float, env :Environment):
-    """
-    Methode bayesienne
-    Remarque : Il n'est pas assure que le w est un MAP sachant les observations !
-    Donc il faudrait trouver une méthode plus exacte. 
-    """
-    features, trans_matx, gamma = env.features, env.trans_matx, env.gamma
-
-    n = features.shape[-1]
-
-    def minus_log_penalized_likelihood(w):
-        policy = softmax(q_function(linear_reward_function(w , features), trans_matx, gamma), eta)
-        retour = np.log(trajectory_likelihood_policy(states, actions, policy)) + np.log(stats.multivariate_normal.pdf(w, mean=mu, cov=Sigma) )
-        return - retour
-    
-    res = optimize.minimize(minus_log_penalized_likelihood, x0 = mu)
-    return res.x
-
-def mle_w_from_mle_trajectory(states, actions, observations, eta : float, env : Environment):
+def mle_w_from_complete_trajectory(ctraj : CompleteTrajectory, eta : float, env : Environment):
     """ 
     Methode non bayesienne pour estimer les parametres 
     """
@@ -181,57 +138,16 @@ def mle_w_from_mle_trajectory(states, actions, observations, eta : float, env : 
     n = features.shape[-1]
 
     def minus_log_complete_likelihood(w):
-        traj = CompleteTrajectory(states = states, actions = actions, observations = observations)
-        retour = complete_trajectory_log_likelihood(traj, w, env, eta)
+        retour = complete_trajectory_log_likelihood(ctraj, w, env, eta)
         return - retour
     
     res = optimize.minimize(minus_log_complete_likelihood, x0 = np.zeros(n))
     return res.x
 
-
-def map_w_from_observations(traj : ObservedTrajectory, mu : np.ndarray, Sigma : np.ndarray, eta : float, env : Environment):
-    """
-    Retourne le MAP (en utilisant de la gradient descent) de w a partir de p(w | mu, Sigma)* \sum_{trajs} p(obs | traj) * p(traj | w)
-    """
-    features, trans_matx, gamma = env.features, env.trans_matx, env.gamma
-
-    def w_exact_posterior(w):
-        policy = softmax(q_function(linear_reward_function(w , features), trans_matx, gamma), eta)
-
-        prior_proba = stats.multivariate_normal.pdf(w, mean=mu, cov=Sigma)
-        unary, binary = get_chain_potentials(traj, policy, env)
-        log_posterior_proba = compute_chain_normalization(np.log(unary), np.log(binary))
-    
-        return - np.log(prior_proba) - log_posterior_proba
-    
-    res = optimize.minimize(w_exact_posterior, x0 = mu)
-    return res.x
-
-def map_w_from_observations_with_monte_carlo(traj : ObservedTrajectory, niw_params : NIWParams, eta : float, env : Environment) -> np.ndarray:
-    
-    features, trans_matx, gamma = env.features, env.trans_matx, env.gamma
-    M, n = 50, env.features.shape[-1]
-    mus_log = np.zeros(shape=(M, n))
-    Sigmas_log = np.zeros(shape=(M, n, n))
-
-    def w_posterior(w):
-        policy = softmax(q_function(linear_reward_function(w , features), trans_matx, gamma), eta)
-        
-        unary, binary = get_chain_potentials(traj, policy, env)
-        log_posterior_proba = compute_chain_normalization(np.log(unary), np.log(binary))
-        log_prior_proba = np.log(monte_carlo_niw_likelihood(w, niw_params, M, mus_log, Sigmas_log))
-        return -1 * log_posterior_proba - log_prior_proba
-
-    res = optimize.minimize(w_posterior, x0 = niw_params.mu_mean)
-    if np.isnan(res.x).any():
-        print(res.x, '. Minimization is successul ? ', res.success)
-    else:
-        print(res.x )
-    return res.x
-
-def mle_w(traj : ObservedTrajectory, eta : float, env : Environment):
+def mle_w_belief_propagation(traj : ObservedTrajectory, eta : float, env : Environment):
     """
     Retourne le MLE (en utilisant de la gradient descent) de w  \sum_{trajs} p(obs | traj) * p(traj | w)
+    Ne necessite pas de deternminer le MLE des etats
     """
     features, trans_matx, gamma = env.features, env.trans_matx, env.gamma
     _, _, n = features.shape
@@ -243,42 +159,7 @@ def mle_w(traj : ObservedTrajectory, eta : float, env : Environment):
         return - log_posterior_proba
     
     res = optimize.minimize(w_exact_posterior, x0 = np.zeros(n))
+    
     if not res.success:
         raise Exception()
     return res.x
-
-def mh_transition_trajectories(current_states : np.ndarray, candidate_states : np.ndarray, obstraj : ObservedTrajectory, policy : np.ndarray, env : Environment):
-    """
-    A partir de deux trajectoires, accepte l'une ou l'autre selon la formule de transition de Metropolis Hastings
-    parameters :   
-        - current_traj et candidate_traj : dictionnaires avec des champs states et actions
-        i.e current_traj['actions'] et current_traj['states']
-    returns:
-        - booleen si on accepte (ou non) de changer de trajectoire
-    """
-    trans_matx, obs_matx, initial_distribution = env.trans_matx, env.obs_matx, env
-
-    like_current = trajectory_conditional_likelihood(current_states, obstraj, policy, env)
-    like_candidate = trajectory_conditional_likelihood(candidate_states, obstraj, policy, env)
-
-    return np.random.binomial(n=1, p = min(1., like_candidate / like_current))
-
-def posterior_normal_inverse_wishart(ws, mu_0, k_0, Sigma_0, nu_0):
-    """
-    arguments:
-        - ws : array de taille k x n
-        - mu_0 : array de taille n
-        - Sigma_0 : array de taille n x n
-    """
-    k, n = ws.shape
-    w_mean = np.mean(ws, axis=0)
-    w_cov  = (ws - w_mean).T @ (ws - w_mean)
-    
-    nu_post = nu_0 + k
-    k_post   = k_0  + k
-
-    mu_post = (k_0 * mu_0 + k * w_mean) / k_post
-    w_tilde = np.reshape(w_mean - mu_0, newshape=(1, n))
-    Sigma_post = Sigma_0 + w_cov + (k_0 * k) / k_post * (w_tilde.T @ w_tilde)
-
-    return mu_post, k_post, Sigma_post, nu_post

@@ -67,7 +67,7 @@ def main_aux(M : int, mus : np.ndarray, Sigmas : np.ndarray, env : environnement
     # Etape 1 : Estimer les ws
     for m in range(M):
         obs_traj = trajectory.ObservedTrajectory(actions = actions[m], observations = observations[m])
-        infered_ws[m] = inference.mle_w(obs_traj, eta, env)
+        infered_ws[m] = inference.mle_w_belief_propagation(obs_traj, eta, env)
         
     gaussianmixture.fit(infered_ws)
 
@@ -77,11 +77,11 @@ def main_aux(M : int, mus : np.ndarray, Sigmas : np.ndarray, env : environnement
 def config():
     N_trials = 10
     M = 50
-    save_mus_file = 'experiments/logs/exp_3_random_features.npy'
+    save_file = 'experiments/logs/exp_3_random_features.npy'
     T = 20
 
 @exp.automain
-def main(N_trials : int, M : int, save_mus_file : str, T : int):
+def main(N_trials : int, M : int, save_file : str, T : int):
     n = 3
     # multiplier par deux car deux moyenne par essai
     infered_mus_trials = np.zeros(shape=(2*N_trials, n))
@@ -104,7 +104,7 @@ def main(N_trials : int, M : int, save_mus_file : str, T : int):
     mus_mixture = mixture.GaussianMixture(n_components=2)
     mus_mixture.fit(infered_mus_trials)
 
-    np.save(save_mus_file, infered_mus_trials)
+    np.save(save_file, infered_mus_trials)
 
     print("==== INFERED MUS (AVERAGE )====")
     print(mus_mixture.means_)
