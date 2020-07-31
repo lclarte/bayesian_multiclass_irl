@@ -139,7 +139,7 @@ def trajectories_to_state_occupation(trajectories, S):
             avg_occ[t, traj[t]] += 1.
     return avg_occ / float(len(trajectories))
 
-def new_map_w_from_map_trajectory(ctraj : CompleteTrajectory, mu : np.ndarray, Sigma : np.ndarray, eta : float, env :Environment):
+def new_map_w_from_mle_trajectory(ctraj : CompleteTrajectory, mu : np.ndarray, Sigma : np.ndarray, eta : float, env :Environment):
     """
     Remarque : Il n'est pas assure que le w est un MAP sachant les observations !
     Donc il faudrait trouver une méthode plus exacte. 
@@ -155,8 +155,9 @@ def new_map_w_from_map_trajectory(ctraj : CompleteTrajectory, mu : np.ndarray, S
     res = optimize.minimize(minus_log_penalized_likelihood, x0 = mu)
     return res.x
 
-def map_w_from_map_trajectory(states, actions, mu : np.ndarray, Sigma : np.ndarray, eta : float, env :Environment):
+def map_w_from_mle_trajectory(states, actions, mu : np.ndarray, Sigma : np.ndarray, eta : float, env :Environment):
     """
+    Methode bayesienne
     Remarque : Il n'est pas assure que le w est un MAP sachant les observations !
     Donc il faudrait trouver une méthode plus exacte. 
     """
@@ -171,6 +172,22 @@ def map_w_from_map_trajectory(states, actions, mu : np.ndarray, Sigma : np.ndarr
     
     res = optimize.minimize(minus_log_penalized_likelihood, x0 = mu)
     return res.x
+
+def mle_w_from_mle_trajectory(states, actions, observations, eta : float, env : Environment):
+    """ 
+    Methode non bayesienne pour estimer les parametres 
+    """
+    features = env.features
+    n = features.shape[-1]
+
+    def minus_log_complete_likelihood(w):
+        traj = CompleteTrajectory(states = states, actions = actions, observations = observations)
+        retour = complete_trajectory_log_likelihood(traj, w, env, eta)
+        return - retour
+    
+    res = optimize.minimize(minus_log_complete_likelihood, x0 = np.zeros(n))
+    return res.x
+
 
 def map_w_from_observations(traj : ObservedTrajectory, mu : np.ndarray, Sigma : np.ndarray, eta : float, env : Environment):
     """
@@ -226,6 +243,8 @@ def mle_w(traj : ObservedTrajectory, eta : float, env : Environment):
         return - log_posterior_proba
     
     res = optimize.minimize(w_exact_posterior, x0 = np.zeros(n))
+    if not res.success:
+        raise Exception()
     return res.x
 
 def mh_transition_trajectories(current_states : np.ndarray, candidate_states : np.ndarray, obstraj : ObservedTrajectory, policy : np.ndarray, env : Environment):

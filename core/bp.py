@@ -16,10 +16,10 @@ def compute_chain_normalization(log_psi_1 : np.ndarray, log_psi_2 : np.ndarray):
 		- log_psi_2 : log of potentials for 2 variables. Shape is (n - 1, K, K)	
 					  log_psi_2[i, x, y] = Psi_{i, i+1}(x, y)
 	"""
-	# TODO : Voir comment integrer ceci dans le code 
-	# np.seterr(all='raise')
-	try:
-	
+	print('log_psi_1 = ', log_psi_1)
+	print('log_psi_2 = ', log_psi_2)
+
+	try:	
 		n, K = log_psi_1.shape
 		# forward_messages[i] = \mu_{i-1 -> i}
 		forward_messages = np.zeros(shape=(n, K))
@@ -29,14 +29,17 @@ def compute_chain_normalization(log_psi_1 : np.ndarray, log_psi_2 : np.ndarray):
 			forward_messages[k] = logsumexp(forward_messages[k-1] + log_psi_1[k] + log_psi_2[k - 1].transpose(), axis=1)
 		for k in reversed(range(n-1)):
 			backward_messages[k] = logsumexp(backward_messages[k+1] + log_psi_1[k] + log_psi_2[k].transpose(), axis=1)
+		print('forward_messages = ', forward_messages)
+		print('backward messages = ', backward_messages)
 		# marginal distributions
 		log_probas = forward_messages + backward_messages + log_psi_1
 		# compute the log_Z using marginal at last node 
+		print('result = ', log_probas)
+		input()
 		return logsumexp(log_probas[-1])
-	
 	except Exception as e: 
-
-		print("Error in chain normalization : ")
+		print("Error in chain normalization (final result is" + str(log_probas) + " ): ")
 		print(e)
+		input()
 		return 0.
 
