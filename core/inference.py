@@ -56,23 +56,39 @@ def complete_trajectory_log_likelihood(traj : CompleteTrajectory, w : np.ndarray
 
 def observed_trajectory_log_likelihood(otraj : ObservedTrajectory, w : np.ndarray, env : Environment, eta : float) -> float:
     """
+    NE FONCTIONNE PAS POUR L'INSTANT !!! FAIRE DE LA BELIEF PROPAGATION "PROPREMENT"
     log likelihood d'une trajectoire observation = actions & observations en fonction de w
     """
     assert otraj.check_valid() == True
 
-    S, A, O = env.obsvn_matx.shape
+    act, obs = otraj.actions, otraj.observations
+    log_trans, log_obs = np.log(env.trans_matx), np.log(env.obsvn_matx)
+
+    log_policy = np.log(softmax(q_function(linear_reward_function(w, env.features), env.trans_matx, env.gamma), eta))
+
+    S = env.obsvn_matx.shape[0]
+    # indices des states : 0, ..., T (T+1 etats dans la trajectoire)
     T = len(otraj.actions)
 
-    total_log_p = 0.
-    size = (S, )* (T+1)
-    # iterate over all possible tuples
-    it = np.nditer(np.zeros(size), flags=['multi_index'])
-    for _ in it:
-        indx = it.multi_index
-        states = np.array(indx)
-        traj = CompleteTrajectory(actions = otraj.actions, observations = otraj.observations, states = states)
-        total_log_p += complete_trajectory_log_likelihood(traj, w, env, eta)
-    return total_log_p
+    # on fait tout en echelle logarithmique
+    try:
+        message = np.zeros(shape=(T, S))
+
+        # faire le cas (T-1) -> T
+        for s in range(S):
+            message[T-1, s] = special.logsumexp(log_trans[s, act[T-1], :] + log_obs[:, act[T-1], obs[T-1]])
+
+        # message passing de la fin au debut
+        for t in range(T-2, -1, -1):
+            for s in range(S):
+                # mu_{t -> t+1}
+                message[t, s] = special.logsumexp(log_trans[s, act[t], :] + log_policy[:, act[t+1]] + log_obs[:, act[t], obs[t]] + message[t + 1])
+
+        # traiter le cas t == 0 (distribution initiale + p(a_0 | s_0))
+        proba_0 = np.log(env.init_dist) + log_policy[:, act[0]] + message[0]
+    except Exception as e:
+        print(e)
+    return special.logsumexp(proba_0)
 
 def get_trajectory_reward(states, actions, reward_function):
     """
@@ -132,34 +148,30 @@ Ci-dessous, inference du vecteur de poids w en fonction des trajectoires observe
 
 def mle_w_from_complete_trajectory(ctraj : CompleteTrajectory, eta : float, env : Environment):
     """ 
-    Methode non bayesienne pour estimer les parametres 
+    Methode non bayesienne pour estimer les poids w a partir d'une trajectoire complete (states + actions + observation) 
     """
     features = env.features
     n = features.shape[-1]
 
     def minus_log_complete_likelihood(w):
-        retour = complete_trajectory_log_likelihood(ctraj, w, env, eta)
+        # terme de regularisation 
+        retour = complete_trajectory_log_likelihood(ctraj, w, env, eta) 
         return - retour
     
     res = optimize.minimize(minus_log_complete_likelihood, x0 = np.zeros(n))
     return res.x
 
-def mle_w_belief_propagation(traj : ObservedTrajectory, eta : float, env : Environment):
+def mle_w_from_observed_trajectory(traj : ObservedTrajectory, eta : float, env : Environment):
     """
-    Retourne le MLE (en utilisant de la gradient descent) de w  \sum_{trajs} p(obs | traj) * p(traj | w)
-    Ne necessite pas de deternminer le MLE des etats
+    Methode non bayesienne pour estimer les poids w a partir d'observations (pour l'instant obs + actions)
     """
     features, trans_matx, gamma = env.features, env.trans_matx, env.gamma
     _, _, n = features.shape
     
-    def w_exact_posterior(w):
-        policy = softmax(q_function(linear_reward_function(w , features), trans_matx, gamma), eta)
-        unary, binary = get_chain_potentials(traj, policy, env)
-        log_posterior_proba = compute_chain_normalization(np.log(unary), np.log(binary))
-        return - log_posterior_proba
+    def mle_w_observed_aux(w):
+        # Essai : sommer sur les trajectoires (coute cher)
+        log_posterior_proba = observed_trajectory_log_likelihood(traj, w, env, eta)
+        return -1*log_posterior_proba
     
-    res = optimize.minimize(w_exact_posterior, x0 = np.zeros(n))
-    
-    if not res.success:
-        raise Exception()
+    res = optimize.minimize(mle_w_observed_aux, x0 = np.zeros(n))
     return res.x
