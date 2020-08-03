@@ -175,3 +175,17 @@ def mle_w_from_observed_trajectory(traj : ObservedTrajectory, eta : float, env :
     
     res = optimize.minimize(mle_w_observed_aux, x0 = np.zeros(n))
     return res.x
+
+def map_w_from_observed_trajectory(traj : ObservedTrajectory, params : MultivariateParams, eta : float, env : Environment):
+    mu, Sigma = params.mu, params.Sigma
+    features, trans_matx, gamma = env.features, env.trans_matx, env.gamma
+    _, _, n = features.shape
+    
+    def map_w_observed_aux(w):
+        # Essai : sommer sur les trajectoires (coute cher)
+        log_posterior_proba = observed_trajectory_log_likelihood(traj, w, env, eta)
+        log_prior_proba = stats.multivariate_normal.pdf(w, mu, Sigma)
+        return - log_posterior_proba - log_prior_proba
+    
+    res = optimize.minimize(map_w_observed_aux, x0 = mu)
+    return res.x
