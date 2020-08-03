@@ -67,7 +67,7 @@ def main_aux(M : int, mus : np.ndarray, Sigmas : np.ndarray, env : environnement
     # Etape 1 : Estimer les ws
     for m in range(M):
         obs_traj = trajectory.ObservedTrajectory(actions = actions[m], observations = observations[m])
-        infered_ws[m] = inference.mle_w_belief_propagation(obs_traj, eta, env)
+        infered_ws[m] = inference.mle_w_from_observed_trajectory(obs_traj, eta, env)
         
     gaussianmixture.fit(infered_ws)
 

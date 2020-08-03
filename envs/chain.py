@@ -13,6 +13,7 @@ def get_chain_env(S : int, alpha : float =1., beta : float =1., eps : float =.1)
         - eps : proba de retourner a l'etat initial 0 
     """
     assert S > 2
+    
     # two actions : go right or stay in same 
     A, O = 2, S
     obsvn_matx = environnement.noisy_id_observation_matrix(S, A, O, eps=0.)

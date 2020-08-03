@@ -30,9 +30,8 @@ import envs.chain as chain
 exp = sacred.Experiment("experiment_1")
 
 def compute_trajectories_from_ws(ws : np.ndarray, env : environnement.Environment, eta : float, T : int):
-    M, n = ws.shape
-    S, A, O = env.obsvn_matx.shape
-
+    M = len(ws)
+    
     states = np.zeros(shape = (M, T+1), dtype=int)
     actions = np.zeros(shape = (M, T), dtype=int)
     observations = np.zeros(shape = (M, T), dtype=int)
@@ -72,13 +71,15 @@ def main_aux(M : int, mus : np.ndarray, Sigmas : np.ndarray, env : environnement
         belief = inference.get_belief_from_observations(observations[m], actions[m], env)
         mle_traj = np.argmax(belief, axis=1)
         ctraj = trajectory.CompleteTrajectory(states = mle_traj, actions = actions[m], observations = observations[m])
+        otraj = trajectory.ObservedTrajectory(actions = actions[m], observations = observations[m])
 
         try:
-            # infered_ws[m] = inference.mle_w(obs_traj, eta, env)
-            infered_ws[m] = inference.mle_w_from_complete_trajectory(ctraj, eta, env)
+            infered_ws[m] = inference.mle_w_from_observed_trajectory(otraj, eta, env)
+            # infered_ws[m] = inference.mle_w_from_complete_trajectory(ctraj, eta, env)
         except Exception as e:
             print('Optimization failed !', m)
     
+    # a commenter eventuellement 
     if n == 2:
         colors = ['r', 'b', 'g', 'k', 'c', 'm']
         plt.scatter(infered_ws[:, 0], infered_ws[:, 1], c=true_classes, cmap=matplotlib.colors.ListedColormap(colors))
