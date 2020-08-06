@@ -11,7 +11,7 @@ fig = plt.figure(figsize = (10, 7))
 ax = plt.axes(projection ="3d") 
   
 # Creating plot 
-ax.scatter3D(x, y, z, color = "green"); 
+ax.scatter3D(x, y, z, color = "green")
 plt.title("simple 3D scatter plot") 
   
 # show plot 

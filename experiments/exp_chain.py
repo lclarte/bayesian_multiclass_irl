@@ -74,8 +74,11 @@ def main_aux(M : int, mus : np.ndarray, Sigmas : np.ndarray, env : environnement
         otraj = trajectory.ObservedTrajectory(actions = actions[m], observations = observations[m])
 
         try:
-            infered_ws[m] = inference.mle_w_from_observed_trajectory(otraj, eta, env)
-            # infered_ws[m] = inference.mle_w_from_complete_trajectory(ctraj, eta, env)
+            # Methode non bayesienne
+            # infered_ws[m] = inference.mle_w_from_observed_trajectory(otraj, eta, env)
+            # Methode bayesienne 
+            params = niw.MultivariateParams(mu = mus[true_classes[m]], Sigma = 100*Sigmas[true_classes[m]])
+            infered_ws[m] = inference.map_w_from_observed_trajectory(ctraj, params, eta, env)
         except Exception as e:
             print('Optimization failed !', m)
     
@@ -84,8 +87,6 @@ def main_aux(M : int, mus : np.ndarray, Sigmas : np.ndarray, env : environnement
         colors = ['r', 'b', 'g', 'k', 'c', 'm']
         plt.scatter(infered_ws[:, 0], infered_ws[:, 1], c=true_classes, cmap=matplotlib.colors.ListedColormap(colors))
         plt.scatter(ws[:, 0], ws[:, 1], marker='+', c=true_classes, cmap=matplotlib.colors.ListedColormap(colors))
-        for m in range(M):
-            print(true_classes[m], ' : ', infered_ws[m])
         plt.show()
 
     # classe pour estimer les parametres 
@@ -122,7 +123,7 @@ def main(N_trials : int, M : int, save_file : str, alpha : float, beta : float, 
         debut = time.time()
         ws, infered_ws, infered_mus  = main_aux(M, mus, Sigmas, env, eta, T)
         infered_mus_trials[n_classes*i:n_classes*(i+1)] = infered_mus
-        print('Trial #', i, ': ', time.time() - debut)
+        print('Trial #', i, ': ', time.time() - debut, ' seconds')
 
     mus_mixture = mixture.GaussianMixture(n_components=n_classes)
     mus_mixture.fit(infered_mus_trials)
