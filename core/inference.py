@@ -56,7 +56,6 @@ def complete_trajectory_log_likelihood(traj : CompleteTrajectory, w : np.ndarray
 
 def observed_trajectory_log_likelihood(otraj : ObservedTrajectory, w : np.ndarray, env : Environment, eta : float) -> float:
     """
-    NE FONCTIONNE PAS POUR L'INSTANT !!! FAIRE DE LA BELIEF PROPAGATION "PROPREMENT"
     log likelihood d'une trajectoire observation = actions & observations en fonction de w
     """
     assert otraj.check_valid() == True
@@ -171,7 +170,7 @@ def mle_w_from_observed_trajectory(traj : ObservedTrajectory, eta : float, env :
     def mle_w_observed_aux(w):
         # Essai : sommer sur les trajectoires (coute cher)
         log_posterior_proba = observed_trajectory_log_likelihood(traj, w, env, eta)
-        return -1*log_posterior_proba
+        return -log_posterior_proba
     
     res = optimize.minimize(mle_w_observed_aux, x0 = np.zeros(n))
     return res.x
@@ -184,8 +183,11 @@ def map_w_from_observed_trajectory(traj : ObservedTrajectory, params : Multivari
     def map_w_observed_aux(w):
         # Essai : sommer sur les trajectoires (coute cher)
         log_posterior_proba = observed_trajectory_log_likelihood(traj, w, env, eta)
-        log_prior_proba = stats.multivariate_normal.pdf(w, mu, Sigma)
+        log_prior_proba = np.log(stats.multivariate_normal.pdf(w, mu, Sigma))
         return - log_posterior_proba - log_prior_proba
     
     res = optimize.minimize(map_w_observed_aux, x0 = mu)
+
+    if not res.success:
+        print('Optimization failed !')
     return res.x
