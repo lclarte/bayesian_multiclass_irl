@@ -5,7 +5,7 @@ import numpy as np
 
 import core.environnement as environnement
 
-def get_chain_env(S : int, alpha : float =1., beta : float =1., eps : float =.1) -> environnement.Environment:
+def get_chain_env(S : int, alpha : float =1., beta : float =1., delta=0., gamma=0., eps : float =.1) -> environnement.Environment:
     """
     Dans cet environnement, on a que deux etats interessants : le dernier ou l'avant dernier
     arguments:
@@ -33,9 +33,9 @@ def get_chain_env(S : int, alpha : float =1., beta : float =1., eps : float =.1)
     
     features = np.zeros(shape=(S, A, 2))
     for n in range( S - 1 ):
-        features[n, 0] = features[n, 1]     = [alpha, 0.]
+        features[n, 0] = features[n, 1]     = [alpha, delta]
 
-    features[S - 1, 0] = features[S - 1, 1] = [0., beta]
+    features[S - 1, 0] = features[S - 1, 1] = [gamma, beta]
     
     init_dist = np.array([1.] + [0.]*(S-1))
     return environnement.Environment(obsvn_matx = obsvn_matx, features = features, trans_matx = trans_matx, init_dist = init_dist)

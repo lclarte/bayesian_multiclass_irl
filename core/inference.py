@@ -177,7 +177,7 @@ def mle_w_from_observed_trajectory(traj : ObservedTrajectory, eta : float, env :
 
 def map_w_from_observed_trajectory(traj : ObservedTrajectory, params : MultivariateParams, eta : float, env : Environment):
     mu, Sigma = params.mu, params.Sigma
-    features, trans_matx, gamma = env.features, env.trans_matx, env.gamma
+    features, _, _ = env.features, env.trans_matx, env.gamma
     _, _, n = features.shape
     
     def map_w_observed_aux(w):
@@ -189,5 +189,6 @@ def map_w_from_observed_trajectory(traj : ObservedTrajectory, params : Multivari
     res = optimize.minimize(map_w_observed_aux, x0 = mu)
 
     if not res.success:
-        print('Optimization failed !')
+        pass 
+        # print('Optimization failed :', res.message)
     return res.x
