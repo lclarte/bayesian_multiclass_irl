@@ -1,7 +1,9 @@
+import pprint
 from typing import List
 
 import numpy as np
 from scipy import stats, optimize, special
+from sklearn import mixture
 
 from core.environnement import *
 from core.bp import *
@@ -86,7 +88,7 @@ def observed_trajectory_log_likelihood(otraj : ObservedTrajectory, w : np.ndarra
         # traiter le cas t == 0 (distribution initiale + p(a_0 | s_0))
         proba_0 = np.log(env.init_dist) + log_policy[:, act[0]] + message[0]
     except Exception as e:
-        print(e)
+        print('Error : ', e)
     return special.logsumexp(proba_0)
 
 def get_trajectory_reward(states, actions, reward_function):
@@ -192,3 +194,64 @@ def map_w_from_observed_trajectory(traj : ObservedTrajectory, params : Multivari
         pass 
         # print('Optimization failed :', res.message)
     return res.x
+
+# FONCTIONS PRINCIPALES 
+
+def get_class(x, mus, Sigmas) -> int:
+    """
+    retoune la classe associee au x
+    """
+    C = len(mus)
+    return np.argmax([stats.multivariate_normal.pdf(x, mean=mus[c], cov=Sigmas[c])  for c in range(C)])
+
+def bayesian_pomdp(trajectories : ObservedTrajectory, niw_prior : NIWParams, dp_tau : float, eta : float, env : Environment):
+    """
+    Variante 1 de l'algorithme : 
+    Methode bayesienne
+    arguments : 
+        - dp_tau : prior sur le nombre de classes pour le process de Dirichlet
+    """
+    means_prior = niw_prior.mu_mean
+    precisions_prior = niw_prior.mu_scale
+    covariances_prior = niw_prior.Sigma_mean
+    # dof = degrees of freedom pour le sampling de la matrice de covariance
+    dofs_prior = niw_prior.Sigma_scale
+    gaussianmixture = mixture.BayesianGaussianMixture(mean_prior=means_prior, mean_precision_prior=precisions_prior, covariance_prior=covariances_prior, degrees_of_freedom_prior=dofs_prior)
+
+def em_pomdp(trajectories : List[ObservedTrajectory], n_classes : int, eta : float, env : Environment, n_iter : int, *, verbose : float = False):
+    """
+    Variante 2 de l'algorithme :
+    Methode non bayesienne, basee sur l'EM
+    """
+    pp = pprint.PrettyPrinter()
+
+    _, _, n = env.features.shape
+    gaussianmixture = mixture.GaussianMixture(n_components=n_classes)
+    M = len(trajectories)
+
+    infered_ws = np.zeros(shape=(M, n))
+    infered_classes = np.zeros(shape=(M, ), dtype=int)
+
+    infered_mus = np.zeros(shape=(n_classes, n))
+    infered_Sigmas = np.array([100*np.eye(n) for _ in range(n_classes)])
+
+    for k in range(n_iter):
+        if verbose:
+            pp.pprint('Iteration ' + str(k))
+            pp.pprint('infered_mus = ' + str(infered_mus))
+            pp.pprint('infered_Sigmas = ' + str(infered_Sigmas))
+
+        # step 1 : compute all ws 
+        for m in range(M):
+            c = infered_classes[m]
+            params = MultivariateParams(mu = infered_mus[c], Sigma = infered_Sigmas[c])  
+            infered_ws[m] = map_w_from_observed_trajectory(trajectories[m], params, eta, env)
+
+        # step 2 : update all class assignements + parameters
+        gaussianmixture.fit(infered_ws)
+        infered_mus = gaussianmixture.means_
+        infered_Sigmas = gaussianmixture.covariances_
+
+        infered_classes = list(map(lambda x : get_class(x, infered_mus, infered_Sigmas), infered_ws))
+
+    return infered_mus, infered_Sigmas, infered_classes, infered_ws
