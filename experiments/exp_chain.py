@@ -9,6 +9,7 @@ sys.path.append("..")
 
 import numpy as np
 from sklearn import mixture
+import sklearn
 import matplotlib.pyplot as plt
 import matplotlib
 import sacred
@@ -51,60 +52,59 @@ def get_class(x, mus, Sigmas) -> int:
     C = len(mus)
     return np.argmax([stats.multivariate_normal.pdf(x, mean=mus[c], cov=Sigmas[c])  for c in range(C)])
 
-def main_aux(M : int, mus : np.ndarray, Sigmas : np.ndarray, env : environnement.Environment, eta : float, T : int, fixed_params : bool):
+def main_aux(M : int, mus : np.ndarray, Sigmas : np.ndarray, env : environnement.Environment, eta : float, T : int, bayesian : bool):
     n_classes, n = mus.shape
-    niw_params = niw.default_niw_prior(n)
 
     true_classes = [np.random.choice(n_classes) for _ in range(M)]
-    # current estimation of classes 
-    infered_classes = [np.random.choice(n_classes) for _ in range(M)]
-
     ws = np.zeros(shape=(M, n))
     for m in range(M):
         c = true_classes[m]
         ws[m] = np.random.multivariate_normal(mus[c], Sigmas[c])
-
     _, actions, observations = compute_trajectories_from_ws(ws, env, eta, T)
-    infered_mus, infered_Sigmas = np.zeros(shape=(n_classes, n)), [ np.eye(n) for _ in range(n_classes) ]
-
-    infered_map_ws = np.zeros(shape=(M, n))
+    trajectories = [trajectory.ObservedTrajectory(actions = actions[m], observations = observations[m]) for m in range(M)]
 
     K = 10
- 
-    gaussianmixture = mixture.GaussianMixture(n_components=2)
+    
+    # use em
+    if not bayesian:
+        infered_mus, infered_Sigmas, infered_classes, infered_ws = inference.em_pomdp(trajectories, n_classes, eta, env, n_iter=K, verbose=True)
 
-    if not fixed_params:
-        gaussianmixture = mixture.BayesianGaussianMixture(n_components=2, mean_prior=niw_params.mu_mean, mean_precision_prior=niw_params.mu_scale, degrees_of_freedom_prior=niw_params.Sigma_scale,
-                                                                    covariance_prior=niw_params.Sigma_mean)
-                                                            
-    for k in range(K):
+    # Use bayesian version
+    else:
+        niw_params = niw.default_niw_prior(n)
+        # current estimation of classes 
+        infered_classes = [np.random.choice(n_classes) for _ in range(M)]
+        infered_mus, infered_Sigmas = np.zeros(shape=(n_classes, n)), [ np.eye(n) for _ in range(n_classes) ]
+        infered_ws = np.zeros(shape=(M, n))
+        gaussianmixture = mixture.BayesianGaussianMixture(n_components=n_classes, mean_prior=niw_params.mu_mean, mean_precision_prior=niw_params.mu_scale, degrees_of_freedom_prior=niw_params.Sigma_scale,
+                                                          covariance_prior=niw_params.Sigma_mean)                     
+        for k in range(K):
+            # Etape 1 : Estimer les ws
+            for m in range(M):
+                otraj = trajectory.ObservedTrajectory(actions = actions[m], observations = observations[m])
+            
+                # Methode bayesienne (dans un premier temps, on fait l'hypothese qu'on connait les classes)
+                params = niw.MultivariateParams(mu = infered_mus[infered_classes[m]], Sigma = infered_Sigmas[infered_classes[m]])
+                infered_ws[m] = inference.map_w_from_observed_trajectory(otraj, params, eta, env)
 
-        print('iteration #', k)
-        print('infered_mus : ', infered_mus)
-        print('infered_Sigmas : ', infered_Sigmas)
+            # infer parameters of gaussian mixture
+            gaussianmixture.fit(infered_ws)
+            infered_mus, infered_Sigmas = gaussianmixture.means_, gaussianmixture.covariances_
 
-        # Etape 1 : Estimer les ws
-        for m in range(M):
-            otraj = trajectory.ObservedTrajectory(actions = actions[m], observations = observations[m])
-        
-            # Methode bayesienne (dans un premier temps, on fait l'hypothese qu'on connait les classes)
-            params = niw.MultivariateParams(mu = infered_mus[true_classes[m]], Sigma = infered_Sigmas[true_classes[m]])
-            infered_map_ws[m] = inference.map_w_from_observed_trajectory(otraj, params, eta, env)
-
-        # infer parameters of gaussian mixture
-        gaussianmixture.fit(infered_map_ws)
-        infered_mus, infered_Sigmas = gaussianmixture.means_, (gaussianmixture.covariances_ / (gaussianmixture.degrees_of_freedom_ - n - 1))
-        
     # on calcule les classe a la fin car la fonction gaussianmixture.fit fait son propre calcul des probas d'appartenance lors de l'EM
-    infered_classes = list(map(lambda x : get_class(x, infered_mus, infered_Sigmas), infered_map_ws))
+    infered_classes = list(map(lambda x : get_class(x, infered_mus, infered_Sigmas), infered_ws))
 
-    # a commenter eventuellement 
+    # Affichage des resultats 
     if n == 2:
         colors = ['r', 'b', 'g', 'k', 'c', 'm']
-        plt.scatter(infered_map_ws[:, 0], infered_map_ws[:, 1], c=infered_classes, cmap=matplotlib.colors.ListedColormap(colors))
+        plt.scatter(infered_ws[:, 0], infered_ws[:, 1], c=infered_classes, cmap=matplotlib.colors.ListedColormap(colors))
         plt.show()
 
-    return ws , infered_map_ws, gaussianmixture.means_
+    # afficher l'accuracy 
+    print('Accuracy is : ', sklearn.metrics.accuracy_score(true_classes, infered_classes))
+    print('(or 1 minus the result if labels are switched')
+
+    return ws , infered_ws, gaussianmixture.means_
 
 @exp.config
 def config():
@@ -115,28 +115,24 @@ def config():
     save_file = 'experiments/logs/exp_chain_default.npy'
     alpha = beta = 1.
     delta = gamm = 0.
-    fixed_params = True
+    # Use EM version of hierarchical bayesian version of algorithm
+    bayesian = True
 
 @exp.automain
-def main(N_trials : int, M : int, save_file : str, alpha : float, beta : float, delta : float, gamm : float, T : int, mus : list, fixed_params : bool):
+def main(N_trials : int, M : int, save_file : str, alpha : float, beta : float, delta : float, gamm : float, T : int, mus : list, bayesian : bool):
     n_classes, n = len(mus), len(mus[0])
     env = chain.get_chain_env(S = 5, alpha = alpha, beta = beta, delta = delta, gamma = gamm, eps=.1)
     eta = 1.0
 
     mus = np.array(mus)
-    Sigmas = np.array([.1*np.eye(n) for _ in range(n_classes)])
-
-    niw_params = niw.default_niw_prior(n)
-    # sample from normal inverse wishart
-    if not fixed_params:
-        mus, Sigmas = niw.sample_niw(niw_params, size=(2, ))
-    
+    Sigmas = np.array([np.eye(n) for _ in range(n_classes)])
+        
     # multiplier par deux car deux moyenne par essai
     infered_mus_trials = np.zeros(shape=(n_classes*N_trials, n))
     
     for i in range(N_trials):
         debut = time.time()
-        ws, infered_ws, infered_mus  = main_aux(M, mus, Sigmas, env, eta, T, fixed_params)
+        ws, infered_ws, infered_mus  = main_aux(M, mus, Sigmas, env, eta, T, bayesian)
         infered_mus_trials[n_classes*i:n_classes*(i+1)] = infered_mus
         print('Trial #', i, ': ', time.time() - debut, ' seconds')
 
