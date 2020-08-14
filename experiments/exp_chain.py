@@ -69,27 +69,10 @@ def main_aux(M : int, mus : np.ndarray, Sigmas : np.ndarray, env : environnement
     if not bayesian:
         infered_mus, infered_Sigmas, infered_classes, infered_ws = inference.em_pomdp(trajectories, n_classes, eta, env, n_iter=K, verbose=True)
 
-    # Use bayesian version
     else:
-        niw_params = niw.default_niw_prior(n)
-        # current estimation of classes 
-        infered_classes = [np.random.choice(n_classes) for _ in range(M)]
-        infered_mus, infered_Sigmas = np.zeros(shape=(n_classes, n)), [ np.eye(n) for _ in range(n_classes) ]
-        infered_ws = np.zeros(shape=(M, n))
-        gaussianmixture = mixture.BayesianGaussianMixture(n_components=n_classes, mean_prior=niw_params.mu_mean, mean_precision_prior=niw_params.mu_scale, degrees_of_freedom_prior=niw_params.Sigma_scale,
-                                                          covariance_prior=niw_params.Sigma_mean)                     
-        for k in range(K):
-            # Etape 1 : Estimer les ws
-            for m in range(M):
-                otraj = trajectory.ObservedTrajectory(actions = actions[m], observations = observations[m])
-            
-                # Methode bayesienne (dans un premier temps, on fait l'hypothese qu'on connait les classes)
-                params = niw.MultivariateParams(mu = infered_mus[infered_classes[m]], Sigma = infered_Sigmas[infered_classes[m]])
-                infered_ws[m] = inference.map_w_from_observed_trajectory(otraj, params, eta, env)
-
-            # infer parameters of gaussian mixture
-            gaussianmixture.fit(infered_ws)
-            infered_mus, infered_Sigmas = gaussianmixture.means_, gaussianmixture.covariances_
+        niw_prior = niw.default_niw_prior(n)
+        dp_tau = 1. / n_classes
+        infered_mus, infered_Sigmas, infered_classes, infered_ws = inference.bayesian_pomdp(trajectories, niw_prior, dp_tau, eta, env, n_iter=K, verbose=True)
 
     # on calcule les classe a la fin car la fonction gaussianmixture.fit fait son propre calcul des probas d'appartenance lors de l'EM
     infered_classes = list(map(lambda x : get_class(x, infered_mus, infered_Sigmas), infered_ws))
@@ -98,13 +81,17 @@ def main_aux(M : int, mus : np.ndarray, Sigmas : np.ndarray, env : environnement
     if n == 2:
         colors = ['r', 'b', 'g', 'k', 'c', 'm']
         plt.scatter(infered_ws[:, 0], infered_ws[:, 1], c=infered_classes, cmap=matplotlib.colors.ListedColormap(colors))
+        algo_name = 'EM-based'
+        if bayesian:
+            algo_name = 'hierarchical bayesian'
+        plt.title('Inference of weights for chain environment with ' + algo_name + 'algorithm')
         plt.show()
 
     # afficher l'accuracy 
     print('Accuracy is : ', sklearn.metrics.accuracy_score(true_classes, infered_classes))
     print('(or 1 minus the result if labels are switched')
 
-    return ws , infered_ws, gaussianmixture.means_
+    return ws , infered_ws, infered_mus
 
 @exp.config
 def config():

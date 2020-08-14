@@ -56,7 +56,7 @@ def main_aux(M : int, mus : np.ndarray, Sigmas : np.ndarray, env : environnement
         c = true_classes[m]
         ws[m] = np.random.multivariate_normal(mus[c], Sigmas[c])
 
-    states, actions, observations = compute_trajectories_from_ws(ws, env, eta, T)
+    _, actions, observations = compute_trajectories_from_ws(ws, env, eta, T)
     
     infered_ws = np.zeros(shape=(M, n))
 
