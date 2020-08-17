@@ -83,9 +83,10 @@ def config():
     Ts = list(range(10, 110, 10))
     alpha = beta = 1.
     delta = gamm = 0.
+    save_file = None
 
 @exp.automain
-def main(N_trials : int, M : int, alpha : float, beta : float, delta : float, gamm : float, Ts, mus : list):
+def main(N_trials : int, M : int, alpha : float, beta : float, delta : float, gamm : float, Ts, mus : list, save_file: str):
     n_classes, n = len(mus), len(mus[0])
     env = chain.get_chain_env(S = 5, alpha = alpha, beta = beta, delta = delta, gamma = gamm, eps=.1)
     eta = 1.0
@@ -103,4 +104,7 @@ def main(N_trials : int, M : int, alpha : float, beta : float, delta : float, ga
     plt.plot(Ts, avg_em_accuracies, color='b', label='EM version')
     plt.title('Accuracy of MDP clustering as function of T with M=' + str(M) + ' MDPs')
     plt.legend()
-    plt.show()
+    if not save_file is None:
+        plt.savefig(save_file)
+    else:
+        plt.show()
