@@ -5,7 +5,7 @@ import numpy as np
 
 import core.environnement as environnement
 
-def get_chain_env(S : int, alpha : float =1., beta : float =1., delta=0., gamma=0., eps : float =.1) -> environnement.Environment:
+def get_chain_env(S : int, alpha : float =1., beta : float =1., delta=0., gamma=0., eps : float =.1, obs_eps : float = 0.) -> environnement.Environment:
     """
     Dans cet environnement, on a que deux etats interessants : le dernier ou l'avant dernier
     arguments:
@@ -16,7 +16,7 @@ def get_chain_env(S : int, alpha : float =1., beta : float =1., delta=0., gamma=
     
     # two actions : go right or stay in same 
     A, O = 2, S
-    obsvn_matx = environnement.noisy_id_observation_matrix(S, A, O, eps=0.)
+    obsvn_matx = environnement.noisy_id_observation_matrix(S, A, O, eps=obs_eps)
     
     # transition : avec une certaine proba, on retourne au premier etat
     trans_matx = np.zeros(shape=(S, A, S))

@@ -204,27 +204,58 @@ def get_class(x, mus, Sigmas) -> int:
     C = len(mus)
     return np.argmax([stats.multivariate_normal.pdf(x, mean=mus[c], cov=Sigmas[c])  for c in range(C)])
 
-def bayesian_pomdp(trajectories : ObservedTrajectory, niw_prior : NIWParams, dp_tau : float, eta : float, env : Environment):
+def bayesian_pomdp(trajectories : ObservedTrajectory, niw_prior : NIWParams, dp_tau : float, eta : float, env : Environment, n_iter : int, *, verbose : bool = False):
     """
     Variante 1 de l'algorithme : 
     Methode bayesienne
     arguments : 
         - dp_tau : prior sur le nombre de classes pour le process de Dirichlet
     """
+    M = len(trajectories)
+    _, _, n = env.features.shape
     means_prior = niw_prior.mu_mean
     precisions_prior = niw_prior.mu_scale
     covariances_prior = niw_prior.Sigma_mean
     # dof = degrees of freedom pour le sampling de la matrice de covariance
     dofs_prior = niw_prior.Sigma_scale
-    gaussianmixture = mixture.BayesianGaussianMixture(mean_prior=means_prior, mean_precision_prior=precisions_prior, covariance_prior=covariances_prior, degrees_of_freedom_prior=dofs_prior)
+    gaussianmixture = mixture.BayesianGaussianMixture(weight_concentration_prior=dp_tau, mean_prior=means_prior, mean_precision_prior=precisions_prior,
+                                                      covariance_prior=covariances_prior, degrees_of_freedom_prior=dofs_prior)
+
+    infered_ws = np.zeros(shape=(M, n))
+    infered_classes = np.zeros(shape=(M, ), dtype=int)
+
+    # initialement, une seule classe et un seul parametre
+    infered_mus = np.zeros(shape=(1, n))
+    infered_Sigmas = np.array([covariances_prior])
+
+    for k in range(n_iter):
+        if verbose:
+            print('Iteration ', k)
+            print('infered_mus : ', infered_mus)
+            print('infered_Sigmas : ', infered_Sigmas)
+
+        # step 1 : compute all ws 
+        for m in range(M):
+            c = infered_classes[m]
+            params = MultivariateParams(mu = infered_mus[c], Sigma = infered_Sigmas[c])  
+            infered_ws[m] = map_w_from_observed_trajectory(trajectories[m], params, eta, env)
+        
+        # step 2 : update all class assignements + parameters
+        gaussianmixture.fit(infered_ws)
+
+        infered_mus = gaussianmixture.means_
+        # infered_Sigmas will be the average value of the covariance on inverse wishart distribution : 
+        # E(Sigma) = Sigma_0 / (nu - dim- 1)
+        infered_Sigmas = gaussianmixture.covariances_
+
+    return infered_mus, infered_Sigmas, infered_classes, infered_ws
+
 
 def em_pomdp(trajectories : List[ObservedTrajectory], n_classes : int, eta : float, env : Environment, n_iter : int, *, verbose : float = False):
     """
     Variante 2 de l'algorithme :
     Methode non bayesienne, basee sur l'EM
     """
-    pp = pprint.PrettyPrinter()
-
     _, _, n = env.features.shape
     gaussianmixture = mixture.GaussianMixture(n_components=n_classes)
     M = len(trajectories)
@@ -237,9 +268,9 @@ def em_pomdp(trajectories : List[ObservedTrajectory], n_classes : int, eta : flo
 
     for k in range(n_iter):
         if verbose:
-            pp.pprint('Iteration ' + str(k))
-            pp.pprint('infered_mus = ' + str(infered_mus))
-            pp.pprint('infered_Sigmas = ' + str(infered_Sigmas))
+            print('Iteration ' + str(k))
+            print('infered_mus = ' + str(infered_mus))
+            print('infered_Sigmas = ' + str(infered_Sigmas))
 
         # step 1 : compute all ws 
         for m in range(M):

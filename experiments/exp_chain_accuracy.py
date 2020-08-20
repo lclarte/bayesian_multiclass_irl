@@ -54,21 +54,29 @@ def get_class(x, mus, Sigmas) -> int:
 
 def main_aux(M : int, mus : np.ndarray, Sigmas : np.ndarray, env : environnement.Environment, eta : float, Ts):
     n_classes, n = mus.shape
+
+    K = 10
+
+    true_classes = [np.random.choice(n_classes) for _ in range(M)]
+    ws = np.zeros(shape=(M, n))
+
+    actions, observations = None, None
+
     em_accuracies = []
 
+    for m in range(M):
+        c = true_classes[m]
+        ws[m] = np.random.multivariate_normal(mus[c], Sigmas[c])
+        _, actions, observations = compute_trajectories_from_ws(ws, env, eta, Ts[-1])
+    
+    print('Finished sampling the ', M, ' trajectories')
+
     for t in Ts:
-        true_classes = [np.random.choice(n_classes) for _ in range(M)]
-        ws = np.zeros(shape=(M, n))
-        for m in range(M):
-            c = true_classes[m]
-            ws[m] = np.random.multivariate_normal(mus[c], Sigmas[c])
-        _, actions, observations = compute_trajectories_from_ws(ws, env, eta, t)
-        trajectories = [trajectory.ObservedTrajectory(actions = actions[m], observations = observations[m]) for m in range(M)]
-
-        K = 10
-
-        _, _, em_classes, _ = inference.em_pomdp(trajectories, n_classes, eta, env, n_iter=K, verbose=False)
+        trajectories = [trajectory.ObservedTrajectory(actions = actions[m][:t], observations = observations[m][:t]) for m in range(M)]
+        infered_mus, infered_Sigmas, em_classes, infered_ws = inference.em_pomdp(trajectories, n_classes, eta, env, n_iter=K, verbose=False)
         em_acc = sklearn.metrics.accuracy_score(true_classes, em_classes)
+        if em_acc == 0.5:
+            plt.scatter(infered_ws[:, 0], infered_ws[:, 1]) ; plt.show()
         em_accuracies.append(max(em_acc, 1-em_acc))
         print('With T = ', t, ', accuracy for EM is ', em_accuracies[-1])
 
@@ -81,14 +89,13 @@ def config():
     N_trials = 10
     M = 50
     Ts = list(range(10, 110, 10))
-    alpha = beta = 1.
-    delta = gamm = 0.
+    eps =0.
     save_file = None
 
 @exp.automain
-def main(N_trials : int, M : int, alpha : float, beta : float, delta : float, gamm : float, Ts, mus : list, save_file: str):
+def main(N_trials : int, M : int, Ts, mus : list, save_file: str, eps: str):
     n_classes, n = len(mus), len(mus[0])
-    env = chain.get_chain_env(S = 5, alpha = alpha, beta = beta, delta = delta, gamma = gamm, eps=.1)
+    env = chain.get_chain_env(S = 5, alpha = 1., beta = 1., delta = 0., gamma = 0., eps=.1, obs_eps=eps)
     eta = 1.0
 
     mus = np.array(mus)
