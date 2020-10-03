@@ -1,6 +1,11 @@
 ### Summary
 
-This project deals with the problem of bayesian multitask inverse reinforcement learning (or Bayesian MT-IRL) for Partially Observable Markov Decision Processes (POMDP). 
+This project deals with the problem of bayesian multitask inverse reinforcement learning (or Bayesian MT-IRL) for Partially Observable Markov Decision Processes (POMDP) : consider an agent whose policy is parametrized by a vector _w_, distributed on a mixture of Normal Inverse Wishart (NIW). Our goal is to infer the parameters of this mixture.
+
+Relevant articles : 
+* [Lazaric et al., Bayesian multitask reinforcement learning](https://hal.inria.fr/inria-00475214/document)
+* [Dimitrakakis et al., Bayesian multitask inverse reinforcement learning](https://arxiv.org/abs/1106.3655)
+* [Choi et Kim, Nonparametric bayesian inverse reinforcement learning for multiple reward functions](https://papers.nips.cc/paper/4737-nonparametric-bayesian-inverse-reinforcement-learning-for-multiple-reward-functions)
 
 ### Code organization 
 
