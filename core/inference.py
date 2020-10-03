@@ -4,6 +4,7 @@ from typing import List
 import numpy as np
 from scipy import stats, optimize, special
 from sklearn import mixture
+from matplotlib import cm
 
 from core.environnement import *
 from core.bp import *
@@ -185,14 +186,13 @@ def map_w_from_observed_trajectory(traj : ObservedTrajectory, params : Multivari
     def map_w_observed_aux(w):
         # Essai : sommer sur les trajectoires (coute cher)
         log_posterior_proba = observed_trajectory_log_likelihood(traj, w, env, eta)
-        log_prior_proba = np.log(stats.multivariate_normal.pdf(w, mu, Sigma))
+
+        log_prior_proba = np.log(stats.multivariate_normal.pdf(w, mu, Sigma, allow_singular=True))
         return - log_posterior_proba - log_prior_proba
     
-    res = optimize.minimize(map_w_observed_aux, x0 = mu)
+    x_initial = mu
+    res = optimize.minimize(map_w_observed_aux, x0 = x_initial)
 
-    if not res.success:
-        pass 
-        # print('Optimization failed :', res.message)
     return res.x
 
 # FONCTIONS PRINCIPALES 
@@ -202,7 +202,7 @@ def get_class(x, mus, Sigmas) -> int:
     retoune la classe associee au x
     """
     C = len(mus)
-    return np.argmax([stats.multivariate_normal.pdf(x, mean=mus[c], cov=Sigmas[c])  for c in range(C)])
+    return np.argmax([stats.multivariate_normal.pdf(x, mean=mus[c], cov=Sigmas[c], allow_singular=True)  for c in range(C)])
 
 def bayesian_pomdp(trajectories : ObservedTrajectory, niw_prior : NIWParams, dp_tau : float, eta : float, env : Environment, n_iter : int, *, verbose : bool = False):
     """
@@ -251,11 +251,13 @@ def bayesian_pomdp(trajectories : ObservedTrajectory, niw_prior : NIWParams, dp_
     return infered_mus, infered_Sigmas, infered_classes, infered_ws
 
 
-def em_pomdp(trajectories : List[ObservedTrajectory], n_classes : int, eta : float, env : Environment, n_iter : int, *, verbose : float = False):
+def em_pomdp(trajectories : List[ObservedTrajectory], n_classes : int, eta : float, env : Environment, n_iter : int, *, verbose : float = False, Sigmas_norms : list = None):
     """
     Variante 2 de l'algorithme :
     Methode non bayesienne, basee sur l'EM
     """
+    if Sigmas_norms is None:
+        Sigmas_norms = []
     _, _, n = env.features.shape
     gaussianmixture = mixture.GaussianMixture(n_components=n_classes)
     M = len(trajectories)
@@ -282,6 +284,7 @@ def em_pomdp(trajectories : List[ObservedTrajectory], n_classes : int, eta : flo
         gaussianmixture.fit(infered_ws)
         infered_mus = gaussianmixture.means_
         infered_Sigmas = gaussianmixture.covariances_
+        Sigmas_norms.append(min(np.linalg.norm(infered_Sigmas[i], ord=2) for i in range(2)))
 
         infered_classes = list(map(lambda x : get_class(x, infered_mus, infered_Sigmas), infered_ws))
 

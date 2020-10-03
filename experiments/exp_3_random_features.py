@@ -51,7 +51,7 @@ def get_class(x, mus, Sigmas) -> int:
     retoune la classe associee au x
     """
     C = len(mus)
-    return np.argmax([stats.multivariate_normal.pdf(x, mean=mus[c], cov=Sigmas[c])  for c in range(C)])
+    return np.argmax([stats.multivariate_normal.pdf(x, mean=mus[c], cov=Sigmas[c], allow_singular=True)  for c in range(C)])
 
 def main_aux(M : int, mus : np.ndarray, Sigmas : np.ndarray, env : environnement.Environment, eta : float, T : int, bayesian : bool):
     n_classes, n = mus.shape
@@ -60,7 +60,7 @@ def main_aux(M : int, mus : np.ndarray, Sigmas : np.ndarray, env : environnement
     ws = np.zeros(shape=(M, n))
     for m in range(M):
         c = true_classes[m]
-        ws[m] = np.random.multivariate_normal(mus[c], Sigmas[c])
+        ws[m] = stats.multivariate_normal.rvs(mus[c], Sigmas[c] + 1e-5*np.eye(n))
     _, actions, observations = compute_trajectories_from_ws(ws, env, eta, T)
     trajectories = [trajectory.ObservedTrajectory(actions = actions[m], observations = observations[m]) for m in range(M)]
 
@@ -87,12 +87,12 @@ def main_aux(M : int, mus : np.ndarray, Sigmas : np.ndarray, env : environnement
         colors = ['r', 'g', 'b', 'k', 'c', 'm']
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
-        ax.scatter(infered_ws[:, 0], infered_ws[:, 1], infered_ws[:, 1], c=infered_classes, cmap=matplotlib.colors.ListedColormap(colors))
-        ax.scatter(ws[:, 0], ws[:, 1], ws[:, 2], marker='*', c=infered_classes, cmap=matplotlib.colors.ListedColormap(colors))
+        ax.scatter(infered_ws[:, 0], infered_ws[:, 1], infered_ws[:, 2], c=infered_classes, cmap=matplotlib.colors.ListedColormap(colors))
+        ax.scatter(ws[:, 0], ws[:, 1], ws[:, 2], marker='*', c=true_classes, cmap=matplotlib.colors.ListedColormap(colors))
         algo_name = 'EM-based'
         if bayesian:
             algo_name = 'hierarchical bayesian'
-        plt.title('Inference of weights for chain environment with ' + algo_name + 'algorithm')
+        plt.title('Inference of weights for environment with random features. ' + algo_name + ' algorithm')
         plt.show()
 
     return ws , infered_ws, infered_mus
@@ -117,7 +117,7 @@ def main(N_trials : int, M : int, save_file : str, T : int, mus : list, bayesian
     eta = 1.0
 
     mus = np.array(mus)
-    Sigmas = np.array([np.eye(n) for _ in range(n_classes)])
+    Sigmas = np.array([0.1*np.eye(n) for _ in range(n_classes)])
         
     # multiplier par deux car deux moyenne par essai
     infered_mus_trials = np.zeros(shape=(n_classes*N_trials, n))

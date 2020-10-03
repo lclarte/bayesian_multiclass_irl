@@ -50,7 +50,7 @@ def get_class(x, mus, Sigmas) -> int:
     retoune la classe associee au x
     """
     C = len(mus)
-    return np.argmax([stats.multivariate_normal.pdf(x, mean=mus[c], cov=Sigmas[c])  for c in range(C)])
+    return np.argmax([stats.multivariate_normal.pdf(x, mean=mus[c], cov=Sigmas[c], allow_singular=True)  for c in range(C)])
 
 def main_aux(M : int, mus : np.ndarray, Sigmas : np.ndarray, env : environnement.Environment, eta : float, Ts):
     n_classes, n = mus.shape

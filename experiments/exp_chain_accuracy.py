@@ -50,7 +50,7 @@ def get_class(x, mus, Sigmas) -> int:
     retoune la classe associee au x
     """
     C = len(mus)
-    return np.argmax([stats.multivariate_normal.pdf(x, mean=mus[c], cov=Sigmas[c])  for c in range(C)])
+    return np.argmax([stats.multivariate_normal.pdf(x, mean=mus[c], cov=Sigmas[c], allow_singular=True)  for c in range(C)])
 
 def main_aux(M : int, mus : np.ndarray, Sigmas : np.ndarray, env : environnement.Environment, eta : float, Ts):
     n_classes, n = mus.shape
@@ -75,8 +75,7 @@ def main_aux(M : int, mus : np.ndarray, Sigmas : np.ndarray, env : environnement
         trajectories = [trajectory.ObservedTrajectory(actions = actions[m][:t], observations = observations[m][:t]) for m in range(M)]
         infered_mus, infered_Sigmas, em_classes, infered_ws = inference.em_pomdp(trajectories, n_classes, eta, env, n_iter=K, verbose=False)
         em_acc = sklearn.metrics.accuracy_score(true_classes, em_classes)
-        if em_acc == 0.5:
-            plt.scatter(infered_ws[:, 0], infered_ws[:, 1]) ; plt.show()
+        # if em_acc == 0.5:
         em_accuracies.append(max(em_acc, 1-em_acc))
         print('With T = ', t, ', accuracy for EM is ', em_accuracies[-1])
 
@@ -91,15 +90,18 @@ def config():
     Ts = list(range(10, 110, 10))
     eps =0.
     save_file = None
+    Sigma_scale=1.0
 
 @exp.automain
-def main(N_trials : int, M : int, Ts, mus : list, save_file: str, eps: str):
+def main(N_trials : int, M : int, Ts, mus : list, save_file: str, eps: str, Sigma_scale : float):
     n_classes, n = len(mus), len(mus[0])
     env = chain.get_chain_env(S = 5, alpha = 1., beta = 1., delta = 0., gamma = 0., eps=.1, obs_eps=eps)
+    print("Observation matrix : ")
+    print(env.obsvn_matx)
     eta = 1.0
-
+    
     mus = np.array(mus)
-    Sigmas = np.array([np.eye(n) for _ in range(n_classes)])
+    Sigmas = np.array([Sigma_scale * np.eye(n) for _ in range(n_classes)])
         
     em_accuracies = np.zeros(shape=(N_trials, len(Ts)))
    
