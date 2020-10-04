@@ -53,8 +53,8 @@ def sample_niw(params : NIWParams, size) -> (np.ndarray, np.ndarray):
 
 def niw_posterior_params(prior : NIWParams, samples : np.ndarray) -> NIWParams:
     """
-    Donne la loi posterieure de mu, Sigma a partir de l'observations des w_1, ..., w_N 
-    et du prior mu_0, k_0, Sigma_0, nu_0
+    Gives the posterior parameters of NIW given observations of the w_1, ..., w_N sampled from N(mu, Sigma)
+    and prior mu_0, k_0, Sigma_0, nu_0
     """
 
     mu_0, k_0, Sigma_0, nu_0 = prior.mu_mean, prior.mu_scale, prior.Sigma_mean, prior.Sigma_scale
@@ -71,44 +71,3 @@ def niw_posterior_params(prior : NIWParams, samples : np.ndarray) -> NIWParams:
     Sigma_post = Sigma_0 + w_cov + (k_0 * k) / k_post * (w_tilde.T @ w_tilde)
 
     return NIWParams(mu_post, k_post, Sigma_post, nu_post)
-
-def norminvwishart_pdf(mu : np.ndarray, Sigma : np.ndarray, params : NIWParams) -> float:
-
-    try:
-        mu_likelihood = stats.multivariate_normal.pdf(x = mu, mean = params.mu_mean, cov = Sigma / params.mu_scale)
-        Sigma_likelihood = stats.invwishart.pdf(x = Sigma, df = params.Sigma_scale, scale = params.Sigma_mean)
-        return mu_likelihood * Sigma_likelihood
-    
-    except Exception as e:
-        M = Sigma / params.mu_scale
-        Minv = np.linalg.inv(M)
-        print('Error in pdf of normal inverse wishart :', np.linalg.det(M), ' & ', np.linalg.det(Minv))
-        
-        raise Exception()
-
-def monte_carlo_niw_likelihood(w : np.ndarray, params : NIWParams, M = 10, mus_log : np.ndarray = None, Sigmas_log : np.ndarray = None) -> float:
-    """
-    Ne semble pas fonctionner pour l'instant 
-    """
-    assert mus_log is None or len(mus_log) == M
-    assert Sigmas_log is None or len(Sigmas_log) == M
-    likelihood = 0.
-
-    mus, Sigmas = sample_niw(params, size=(M, ))
-    if not (mus_log is None):
-        mus_log[:] = mus
-    if not (Sigmas_log is None):
-        Sigmas_log[:] = Sigmas
-    
-    den = 0
-
-    for m in range(M):
-
-        try:
-            niw_likelihood = norminvwishart_pdf(mus[m], Sigmas[m], params)
-            likelihood += stats.multivariate_normal.pdf(w, mean=mus[m], cov=Sigmas[m]) * niw_likelihood
-            den += 1
-        except Exception as e:
-            pass
-
-    return (likelihood / float(den))

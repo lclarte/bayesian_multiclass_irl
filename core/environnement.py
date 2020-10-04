@@ -1,3 +1,6 @@
+# environnement.py
+# describes the representation for a POMDP : transition matrix, observation matrix, etc. 
+
 import numpy as np
 import scipy.stats as stats
 import matplotlib.pyplot as plt
@@ -6,8 +9,7 @@ from typing import NamedTuple
 
 class Environment(NamedTuple):
     """
-    Classe contenant les probas de transition et d'observation et les features pour la reward 
-    Attention a ce que les matrices soient by normalisees
+    Contains the data necessary for a MDP environment
     Taille des matrices : 
         - trans_matx : S x A x S
         - obsvn_matx : S x A x O

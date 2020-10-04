@@ -1,3 +1,7 @@
+# dirichletprocess.py
+# contains function to sample from dirichlet process with the stick breaking process 
+# cf. https://en.wikipedia.org/wiki/Dirichlet_process#The_stick-breaking_process
+
 import numpy as np
 import scipy.stats as stats
 
@@ -5,11 +9,19 @@ from typing import NamedTuple
 
 def sample_beta(size, tau):
     """
-    Sample from beta distribution 
+    Sample from beta distribution Beta(1.0, tau)
+    parameters:
+        - size : tuple 
+        - tau : real positive number
     """
     return stats.beta.rvs(1., tau, size=size)
 
 def compute_class_probabilities(betas):
+    """
+    Computes a (non normalized) list of probas using the list of betas : 
+    p_k = beta_k \prod_{i = 1}^{k - 1} (1 - beta_i) 
+    """
+    # note : if the list of betas were infinite, the ps would sum to 1
     ps    = np.zeros((len(betas),))
     ps[:]    = betas[:]
     ps[1:] *= np.cumprod(1 - betas[:-1])  
@@ -17,9 +29,7 @@ def compute_class_probabilities(betas):
 
 class DirichletProcess:
     """
-    Classe contenant les parametres tau  & (mu_0, Sigma_0, k_0, nu_0) pour le processus de Dirichlet qui genere les params.
-    mu, SIgma
-    Remarque : nu_0 doit etre strictement plus grand que D - 1, avec D la tailel de Sigma_0
+    Allows to sample exactly from the dirichlet process i.e with an infinite number of classes. 
     """
 
     tau     : float
@@ -52,9 +62,7 @@ class DirichletProcess:
 
     def sample_class(self):
         """
-        Attention : il faut un nombre infini de betas pour que ca somme a 1. 
-        On sample une var Bernoulli(Somme(self.probas)). Si elle vaut 1, alors on fait np.choice(self.probas / Somme(probas))
-        Sinon, on resample des nouvelles probas et on recommence    
+        Sample a single class from the dirichlet process 
         """
         block = 0
         while True:
@@ -70,7 +78,7 @@ class DirichletProcess:
 
     def sample_classes(self, size):
         """
-        Retourne un np array contenant des classes
+        Sample classes given by the tuple size
         """
         classes = np.zeros(shape=size, dtype=int)
         it = np.nditer(classes, flags=['multi_index'])

@@ -1,23 +1,19 @@
 # bp.py
-# Contient les fonctions pour faire de la belief propagation
+# Contains functions for belief propagation
 
 from scipy.special import logsumexp
 import numpy as np
 
 def compute_chain_normalization(log_psi_1 : np.ndarray, log_psi_2 : np.ndarray):
 	"""
-	Compute THE LOG OF the normalization constant given the potentials. Compute forward 
-	and backward messages then compute the marginals and lastly partition
-	function.
+	Compute THE LOG OF the normalization constant for the chain, given the unary and binary potentials. 
 
 	arguments : 
-		- log_psi_1 : log of potentials with 1 variable. Shape is (n, K)
-					  log_psi_1[i, x] = Psi_i(x)
+		- log_psi_1 : log of potentials . Shape is (n, K)
+					  log_psi_1[i, x] = log(Psi_i(x))
 		- log_psi_2 : log of potentials for 2 variables. Shape is (n - 1, K, K)	
-					  log_psi_2[i, x, y] = Psi_{i, i+1}(x, y)
+					  log_psi_2[i, x, y] = log(Psi_{i, i+1}(x, y))
 	"""
-	print('log_psi_1 = ', log_psi_1)
-	print('log_psi_2 = ', log_psi_2)
 
 	try:	
 		n, K = log_psi_1.shape
@@ -29,17 +25,12 @@ def compute_chain_normalization(log_psi_1 : np.ndarray, log_psi_2 : np.ndarray):
 			forward_messages[k] = logsumexp(forward_messages[k-1] + log_psi_1[k] + log_psi_2[k - 1].transpose(), axis=1)
 		for k in reversed(range(n-1)):
 			backward_messages[k] = logsumexp(backward_messages[k+1] + log_psi_1[k] + log_psi_2[k].transpose(), axis=1)
-		print('forward_messages = ', forward_messages)
-		print('backward messages = ', backward_messages)
 		# marginal distributions
 		log_probas = forward_messages + backward_messages + log_psi_1
 		# compute the log_Z using marginal at last node 
-		print('result = ', log_probas)
-		input()
 		return logsumexp(log_probas[-1])
 	except Exception as e: 
 		print("Error in chain normalization (final result is" + str(log_probas) + " ): ")
 		print(e)
-		input()
 		return 0.
 

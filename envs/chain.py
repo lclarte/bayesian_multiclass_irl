@@ -7,10 +7,13 @@ import core.environnement as environnement
 
 def get_chain_env(S : int, alpha : float =1., beta : float =1., delta=0., gamma=0., eps : float =.1, obs_eps : float = 0.) -> environnement.Environment:
     """
-    Dans cet environnement, on a que deux etats interessants : le dernier ou l'avant dernier
+    Chain environment : each state n is linked to (n + 1) or the first state (1) 
+    Feature space is bi-dimensional. 2 possible actions
     arguments:
-        - S   : nombre d'etats 
-        - eps : proba de retourner a l'etat initial 0 
+        - S   : nb of states
+        - eps : proba to return to initial state
+        - alpha, delta : vector (alpha, delta) is feature for all states but the last one  
+        - gamma, beta : vector (gamma, beta) is  feature for last state
     """
     assert S > 2
     

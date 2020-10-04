@@ -62,7 +62,7 @@ def compare_states_mle_states_belief(S, A, O, n, num_ws, T, T_step):
             
         for j in range(len(ts)):
             t = ts[j]
-            states_belief = inference.get_belief_from_observations(observations[:t], actions[:t], env)
+            # states_belief = inference.get_belief_from_observations(observations[:t], actions[:t], env)
 
             # method 1 : MLE of states
             states_mle = np.argmax(states_belief, axis=1)
