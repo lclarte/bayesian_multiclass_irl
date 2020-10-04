@@ -14,10 +14,8 @@ import scipy.stats as stats
 
 import core.niw as niw
 import core.inference as inference
-import core.gibbs_class as gibbs_class
 import core.dirichletprocess as dp
 import core.environnement as environnement
-import core.gibbs_class as gibbs_class
 import core.trajectory as trajectory
 import core.policy as policy
 import core.metrics as metrics
