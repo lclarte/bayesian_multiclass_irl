@@ -85,6 +85,8 @@ def map_w_from_observed_trajectory(traj : ObservedTrajectory, params : Multivari
 
 # ========================== MAIN FUNCTIONS ===============================
 
+# TODO : Faire une classe "HBPOMDP"
+
 def bayesian_pomdp(trajectories : ObservedTrajectory, niw_prior : NIWParams, dp_tau : float, eta : float, env : Environment, n_iter : int, *, verbose : bool = False):
     """
     Hierarchical Bayesian algorithm, makes use of the normal inv. wishart prior for the distribution of the weight vector. 
@@ -129,6 +131,8 @@ def bayesian_pomdp(trajectories : ObservedTrajectory, niw_prior : NIWParams, dp_
 
     return infered_mus, infered_Sigmas, infered_classes, infered_ws
 
+
+# TODO : Faire une classe "EMPOMDP" dont la fonction fit() change les attribus (infered_mus, infered_Sigmas, infered_classes, infered_ws)
 
 def em_pomdp(trajectories : List[ObservedTrajectory], n_classes : int, eta : float, env : Environment, n_iter : int, *, verbose : float = False, Sigmas_norms : list = None):
     """

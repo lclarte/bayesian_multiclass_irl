@@ -6,7 +6,7 @@ import scipy.stats as stats
 class NIWParams(NamedTuple):
     mu_mean : np.array
     mu_scale : float
-    # TODO : Contrairement a ce que son nom indique, Sigma_mean n'est pas l'esperance de la matrice de covariance
+    # Contrairement a ce que son nom indique, Sigma_mean n'est pas l'esperance de la matrice de covariance
     # En effet, l'esperance vaut Sigma_mean / (Sigma_scale - p - 1) avec p la dimension de notre espace 
     Sigma_mean : np.ndarray
     Sigma_scale : float
