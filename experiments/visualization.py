@@ -1,5 +1,6 @@
 from mpl_toolkits import mplot3d 
 from matplotlib import cm
+import matplotlib
 import numpy as np 
 import matplotlib.pyplot as plt
 
@@ -24,3 +25,7 @@ def plot_3d_function(function, x_bounds, y_bounds, num = 20, ws = None):
         ax.scatter(ws[:, 0], ws[:, 1], z_ws)
 
     plt.show()
+
+def plot_inference_2d(infered_ws, infered_classes):
+    colors = ['r', 'b', 'g', 'k', 'c', 'm']
+    plt.scatter(infered_ws[:, 0], infered_ws[:, 1], c=infered_classes, cmap=matplotlib.colors.ListedColormap(colors))

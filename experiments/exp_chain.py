@@ -4,16 +4,19 @@ from datetime import date
 import itertools
 import sys
 import time
+import timeit
 import warnings
 sys.path.append("..")
 
-import numpy as np
-from sklearn import mixture
-import sklearn
+import jax.numpy as jnp
+import jax
 import matplotlib.pyplot as plt
 import matplotlib
+import numpy as np
 import sacred
 import scipy.stats as stats
+from sklearn import mixture
+import sklearn
 
 import core.niw as niw
 import core.inference as inference
@@ -23,24 +26,15 @@ import core.trajectory as trajectory
 import core.policy as policy
 import core.metrics as metrics
 import core.logs as logs
-from . import visualization
+import core.hbpomdp as hbpomdp
+import core.empomdp as empomdp
 
 import envs.chain as chain
 
+from . import visualization
+from . import generation
+
 exp = sacred.Experiment("experiment_1")
-
-def compute_trajectories_from_ws(ws : np.ndarray, env : environnement.Environment, eta : float, T : int):
-    M = len(ws)
-    
-    states = np.zeros(shape = (M, T+1), dtype=int)
-    actions = np.zeros(shape = (M, T), dtype=int)
-    observations = np.zeros(shape = (M, T), dtype=int)
-
-    for m in range(M):
-        states[m], actions[m] = policy.sample_trajectory_from_w(env.init_dist, ws[m], env.features, env.trans_matx, env.gamma, eta, T)
-        observations[m] = environnement.get_observations_from_states_actions(states[m], actions[m], env.obsvn_matx)
-
-    return states, actions, observations
 
 def get_class(x, mus, Sigmas) -> int:
     """
@@ -52,88 +46,60 @@ def get_class(x, mus, Sigmas) -> int:
 def main_aux(M : int, mus : np.ndarray, Sigmas : np.ndarray, env : environnement.Environment, eta : float, T : int, bayesian : bool):
     n_classes, n = mus.shape
 
+    # initialize true values 
     true_classes = [np.random.choice(n_classes) for _ in range(M)]
     ws = np.zeros(shape=(M, n))
     for m in range(M):
         c = true_classes[m]
         ws[m] = np.random.multivariate_normal(mus[c], Sigmas[c])
-    _, actions, observations = compute_trajectories_from_ws(ws, env, eta, T)
-    trajectories = [trajectory.ObservedTrajectory(actions = actions[m], observations = observations[m]) for m in range(M)]
 
-    K = 10
+    trajectories = generation.compute_observed_trajectories_from_ws(ws, env, eta, T)
+
+    # number of iteration for inference (arbitrary)
+    n_iter = 10
+    verbose = False
     
     # use em
     if not bayesian:
-        infered_mus, infered_Sigmas, infered_classes, infered_ws = inference.em_pomdp(trajectories, n_classes, eta, env, n_iter=K, verbose=True)
+        model = empomdp.EMPOMDP(n_classes=n_classes, verbose=verbose, n_iter=n_iter)
+        model.infer(env, trajectories, eta)
 
     else:
         niw_prior = niw.default_niw_prior(n)
-        dp_tau = 1. / n_classes
-        infered_mus, infered_Sigmas, infered_classes, infered_ws = inference.bayesian_pomdp(trajectories, niw_prior, dp_tau, eta, env, n_iter=K, verbose=True)
+        # prior on tau = true number of classes here (should be 1 ?)
+        dp_tau = float(n_classes)
+        model = hbpomdp.HBPOMDP(verbose=verbose, n_iter=n_iter, niw_prior=niw_prior, dp_tau=dp_tau)
+        model.infer(env, trajectories, eta)
+    
+    infered_ws, infered_mus, infered_Sigmas, infered_classes = model.inf_ws, model.inf_mus, model.inf_Sigmas, model.inf_classes
 
-    # on calcule les classe a la fin car la fonction gaussianmixture.fit fait son propre calcul des probas d'appartenance lors de l'EM
-    infered_classes = list(map(lambda x : get_class(x, infered_mus, infered_Sigmas), infered_ws))
-
-    # Affichage des resultats 
-    if n == 2:
-        colors = ['r', 'b', 'g', 'k', 'c', 'm']
-        plt.scatter(infered_ws[:, 0], infered_ws[:, 1], c=infered_classes, cmap=matplotlib.colors.ListedColormap(colors))
-        algo_name = 'EM-based'
-        if bayesian:
-            algo_name = 'hierarchical bayesian'
-        plt.title('Inference of weights for chain environment with ' + algo_name + 'algorithm')
-        plt.show()
+    visualization.plot_inference_2d(infered_ws, infered_classes)
+    plt.show()
 
     # afficher l'accuracy 
-    print('Accuracy is : ', sklearn.metrics.accuracy_score(true_classes, infered_classes))
-    print('(or 1 minus the result if labels are switched')
+    accuracy = sklearn.metrics.accuracy_score(true_classes, infered_classes)
+    print('Accuracy is : ', max(accuracy, 1 - accuracy))
 
     return ws , infered_ws, infered_mus
 
 @exp.config
 def config():
-    mus = [[1., 0.], [0., 1.]]
-    N_trials = 10
     M = 50
     T = 50
-    save_file = 'experiments/logs/exp_chain_default.npy'
-    alpha = beta = 1.
-    delta = gamm = 0.
     # Use EM version of hierarchical bayesian version of algorithm
     bayesian = True
 
 @exp.automain
-def main(N_trials : int, M : int, save_file : str, alpha : float, beta : float, delta : float, gamm : float, T : int, mus : list, bayesian : bool):
-    n_classes, n = len(mus), len(mus[0])
-    env = chain.get_chain_env(S = 5, alpha = alpha, beta = beta, delta = delta, gamma = gamm, eps=.1)
-    eta = 1.0
-
-    mus = np.array(mus)
-    Sigmas = np.array([np.eye(n) for _ in range(n_classes)])
-        
-    # multiplier par deux car deux moyenne par essai
-    infered_mus_trials = np.zeros(shape=(n_classes*N_trials, n))
+def main(M : int, T : int, bayesian : bool):
     
-    for i in range(N_trials):
-        debut = time.time()
-        ws, infered_ws, infered_mus  = main_aux(M, mus, Sigmas, env, eta, T, bayesian)
-        infered_mus_trials[n_classes*i:n_classes*(i+1)] = infered_mus
-        print('Trial #', i, ': ', time.time() - debut, ' seconds')
+    # define environment
+    n_classes, n = 2, 2
+    env = chain.get_chain_env(S = 5, eps=.1)
+    eta = 1.
+    niw_prior = niw.default_niw_prior(2)
+    mus, Sigmas = niw.sample_niw(niw_prior, size=(2,))
 
-    mus_mixture = mixture.GaussianMixture(n_components=n_classes)
-    mus_mixture.fit(infered_mus_trials)
-
-    params = {}
-    params['alpha'] = alpha
-    params['beta'] = beta
-    params['env'] = 'exp_chain.py'
-    params['mus'] = mus.tolist()
-    params['date'] = str(date.today())
-    
-    logs.dump_results(save_file, infered_mus_trials, params)
-
-    print("==== INFERED MUS (AVERAGE )====")
-    print(mus_mixture.means_)
-    print("==== TRUE MUS ====")
-    print(mus)
-    
+    # run inference
+    debut = time.time()
+    ws, infered_ws, infered_mus  = main_aux(M, mus, Sigmas, env, eta, T, bayesian)
+    fin = time.time()
