@@ -26,6 +26,7 @@ def plot_3d_function(function, x_bounds, y_bounds, num = 20, ws = None):
 
     plt.show()
 
-def plot_inference_2d(infered_ws, infered_classes):
+def plot_inference_2d(true_ws, true_classes, infered_ws, infered_classes):
     colors = ['r', 'b', 'g', 'k', 'c', 'm']
+    plt.scatter(true_ws[:, 0], true_ws[:, 1], c=true_classes, marker='*', cmap=matplotlib.colors.ListedColormap(colors))
     plt.scatter(infered_ws[:, 0], infered_ws[:, 1], c=infered_classes, cmap=matplotlib.colors.ListedColormap(colors))
