@@ -26,3 +26,7 @@ def compute_trajectories_from_ws(ws : np.ndarray, env : environment.Environment,
 def compute_observed_trajectories_from_ws(ws : np.ndarray, env : environment.Environment, eta : float, T : int):
     _, actions, observations = compute_trajectories_from_ws(ws, env, eta, T)
     return [ trajectory.ObservedTrajectory(actions = actions[i], observations = observations[i]) for i in range(len(actions))]
+
+def compute_complete_trajectories_from_ws(ws : np.ndarray, env : environment.Environment, eta : float, T : int):
+    states, actions, _ = compute_trajectories_from_ws(ws, env, eta, T)
+    return [ trajectory.CompleteTrajectory(actions = actions[i], states = states[i]) for i in range(len(actions))]

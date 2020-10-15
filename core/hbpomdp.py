@@ -16,11 +16,19 @@ class HBPOMDP:
         self.dp_tau = dp_tau
         self.verbose = verbose
         self.n_iter = n_iter
+        self.partially_observable_trajectories(True)
 
         self.inf_mus = None
         self.inf_Sigmas = None
         self.inf_classes = None
         self.inf_ws = None
+
+    def partially_observable_trajectories(self, po : bool):
+        if po:
+            self.map_w_function = map_w_from_observed_trajectory 
+        else:
+            self.map_w_function = map_w_from_complete_trajectory 
+
 
     def infer(self, env : Environment, trajectories : List[ObservedTrajectory], eta : float):
         """
@@ -59,7 +67,7 @@ class HBPOMDP:
             for m in range(M):
                 c = infered_classes[m]
                 params = MultivariateParams(mu = infered_mus[c], Sigma = infered_Sigmas[c])  
-                infered_ws[m] = map_w_from_observed_trajectory(trajectories[m], params, eta, env)
+                infered_ws[m] = self.map_w_function(trajectories[m], params, eta, env)
             
             # step 2 : update all class assignements + parameters
             gaussianmixture.fit(infered_ws)

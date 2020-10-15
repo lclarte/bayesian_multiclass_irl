@@ -25,6 +25,22 @@ def get_class(x, mus, Sigmas) -> int:
 
 # ======================= COMPUTATION OF LIKELIHOODS ===========================
 
+def complete_trajectory_log_likelihood(traj : CompleteTrajectory, w : np.ndarray, env : Environment, eta : float) -> float:
+    """
+    Pour une trajectoire complete, seule la quantite p(a_t | w) depend du vecteur de poids (le reste est un facteur constant de la traj.)
+    """
+    # retourne au format logarithmique car sinon pb d'echelle 
+    assert traj.check_valid() == True, "Dimensions of trajectory is invalid"
+    
+    policy = softmax(q_function(linear_reward_function(w, env.features), env.trans_matx, env.gamma), eta)
+    actions, states = traj.actions, traj.states
+    T = len(actions)
+    
+    log_p = 0.
+    for t in range(T):
+        log_p += np.log(policy[states[t], actions[t]])
+    return log_p
+
 def observed_trajectory_log_likelihood(otraj : ObservedTrajectory, w : np.ndarray, env : Environment, eta : float) -> float:
     """
     Computes the log likelihood of a parameter w given the partially observed trajectory = states, actions & observations of an agent :
@@ -63,7 +79,7 @@ def observed_trajectory_log_likelihood(otraj : ObservedTrajectory, w : np.ndarra
 
 # ============================= ESTIMATION OF PARAMETER FROM TRAJECTORY  ===========================
 
-def map_w_from_observed_trajectory(traj : ObservedTrajectory, params : MultivariateParams, eta : float, env : Environment):
+def generic_map_w_from_trajectory(traj, params : MultivariateParams, eta : float, env : Environment, likelihood_func : callable):
     """
     Maximum  A Posteriori estimation of weight vector w from data (traj) and prior term (multivariate normal w/ params)
     """
@@ -73,7 +89,7 @@ def map_w_from_observed_trajectory(traj : ObservedTrajectory, params : Multivari
     
     def map_w_observed_aux(w):
         # Essai : sommer sur les trajectoires (coute cher)
-        log_posterior_proba = observed_trajectory_log_likelihood(traj, w, env, eta)
+        log_posterior_proba = likelihood_func(traj, w, env, eta)
 
         log_prior_proba = np.log(stats.multivariate_normal.pdf(w, mu, Sigma, allow_singular=True))
         return - log_posterior_proba - log_prior_proba
@@ -83,91 +99,8 @@ def map_w_from_observed_trajectory(traj : ObservedTrajectory, params : Multivari
 
     return res.x
 
-# ========================== MAIN FUNCTIONS ===============================
+def map_w_from_observed_trajectory(traj : ObservedTrajectory, params : MultivariateParams, eta : float, env : Environment):
+    return generic_map_w_from_trajectory(traj, params, eta, env, observed_trajectory_log_likelihood)
 
-# TODO : Faire une classe "HBPOMDP"
-
-def bayesian_pomdp(trajectories : ObservedTrajectory, niw_prior : NIWParams, dp_tau : float, eta : float, env : Environment, n_iter : int, *, verbose : bool = False):
-    """
-    Hierarchical Bayesian algorithm, makes use of the normal inv. wishart prior for the distribution of the weight vector. 
-    NIW -> Multivariate Gaussian -> weight vector w 
-    """
-    M = len(trajectories)
-    _, _, n = env.features.shape
-    means_prior = niw_prior.mu_mean
-    precisions_prior = niw_prior.mu_scale
-    covariances_prior = niw_prior.Sigma_mean
-    # dof = degrees of freedom pour le sampling de la matrice de covariance
-    dofs_prior = niw_prior.Sigma_scale
-    gaussianmixture = mixture.BayesianGaussianMixture(weight_concentration_prior=dp_tau, mean_prior=means_prior, mean_precision_prior=precisions_prior,
-                                                      covariance_prior=covariances_prior, degrees_of_freedom_prior=dofs_prior)
-
-    infered_ws = np.zeros(shape=(M, n))
-    infered_classes = np.zeros(shape=(M, ), dtype=int)
-
-    # initialement, une seule classe et un seul parametre
-    infered_mus = np.zeros(shape=(1, n))
-    infered_Sigmas = np.array([covariances_prior])
-
-    for k in range(n_iter):
-        if verbose:
-            print('Iteration ', k)
-            print('infered_mus : ', infered_mus)
-            print('infered_Sigmas : ', infered_Sigmas)
-
-        # step 1 : compute all ws 
-        for m in range(M):
-            c = infered_classes[m]
-            params = MultivariateParams(mu = infered_mus[c], Sigma = infered_Sigmas[c])  
-            infered_ws[m] = map_w_from_observed_trajectory(trajectories[m], params, eta, env)
-        
-        # step 2 : update all class assignements + parameters
-        gaussianmixture.fit(infered_ws)
-
-        infered_mus = gaussianmixture.means_
-        # infered_Sigmas will be the average value of the covariance on inverse wishart distribution : 
-        # E(Sigma) = Sigma_0 / (nu - dim- 1)
-        infered_Sigmas = gaussianmixture.covariances_
-
-    return infered_mus, infered_Sigmas, infered_classes, infered_ws
-
-
-# TODO : Faire une classe "EMPOMDP" dont la fonction fit() change les attribus (infered_mus, infered_Sigmas, infered_classes, infered_ws)
-
-def em_pomdp(trajectories : List[ObservedTrajectory], n_classes : int, eta : float, env : Environment, n_iter : int, *, verbose : float = False, Sigmas_norms : list = None):
-    """
-    Non hierarchical bayesian version of the algorithm : components of the gaussian mixture are identified with EM
-    """
-    if Sigmas_norms is None:
-        Sigmas_norms = []
-    _, _, n = env.features.shape
-    gaussianmixture = mixture.GaussianMixture(n_components=n_classes)
-    M = len(trajectories)
-
-    infered_ws = np.zeros(shape=(M, n))
-    infered_classes = np.zeros(shape=(M, ), dtype=int)
-
-    infered_mus = np.zeros(shape=(n_classes, n))
-    infered_Sigmas = np.array([100*np.eye(n) for _ in range(n_classes)])
-
-    for k in range(n_iter):
-        if verbose:
-            print('Iteration ' + str(k))
-            print('infered_mus = ' + str(infered_mus))
-            print('infered_Sigmas = ' + str(infered_Sigmas))
-
-        # step 1 : compute all ws 
-        for m in range(M):
-            c = infered_classes[m]
-            params = MultivariateParams(mu = infered_mus[c], Sigma = infered_Sigmas[c])  
-            infered_ws[m] = map_w_from_observed_trajectory(trajectories[m], params, eta, env)
-
-        # step 2 : update all class assignements + parameters
-        gaussianmixture.fit(infered_ws)
-        infered_mus = gaussianmixture.means_
-        infered_Sigmas = gaussianmixture.covariances_
-        Sigmas_norms.append(min(np.linalg.norm(infered_Sigmas[i], ord=2) for i in range(2)))
-
-        infered_classes = list(map(lambda x : get_class(x, infered_mus, infered_Sigmas), infered_ws))
-
-    return infered_mus, infered_Sigmas, infered_classes, infered_ws
+def map_w_from_complete_trajectory(traj : CompleteTrajectory, params : MultivariateParams, eta : float, env : Environment):
+    return generic_map_w_from_trajectory(traj, params, eta, env, complete_trajectory_log_likelihood)

@@ -14,9 +14,11 @@ class ObservedTrajectory(NamedTuple):
         return len(self.actions) == len(self.observations)
 
 class CompleteTrajectory(NamedTuple):
+    """
+    If we observe the states, the observations are not required
+    """
     states : np.ndarray
     actions : np.ndarray
-    observations : np.ndarray
-
+    
     def check_valid(self):
-        return len(self.actions) == len(self.observations) == len(self.states) - 1
+        return len(self.actions) == len(self.states) - 1

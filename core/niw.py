@@ -21,10 +21,10 @@ class MultivariateParams(NamedTuple):
     def check_valid(self):
         return len(self.mu) == self.Sigma.shape[0] == self.Sigma.shape[1]
 
-def default_niw_prior(n) -> NIWParams:
+def default_niw_prior(n, scale = 1.0) -> NIWParams:
     mu_mean = np.zeros(n)
     mu_scale = 1.
-    Sigma_mean = np.eye(n)
+    Sigma_mean = scale * np.eye(n)
     # pour avoir une moyenne, il faut Sigma_scale > n + 1
     Sigma_scale = float(n+2)
     return NIWParams(mu_mean = mu_mean, mu_scale = mu_scale, Sigma_mean = Sigma_mean, Sigma_scale = Sigma_scale)
